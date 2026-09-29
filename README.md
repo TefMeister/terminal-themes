@@ -28,8 +28,8 @@ size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `
    you put this repo, **written with forward slashes** (`C:/Users/you/terminal-styles`).
 5. Open a new tab with the **Green Monitor Claude** profile.
 
-**Optional, for Claude Code:** put `claude-theme-robco.json` in `%USERPROFILE%\.claude\themes\` and
-pick the RobCo theme with `/theme`. It draws your own messages on a hidden marker colour, which the
+**Optional, for Claude Code:** save `claude-theme-robco.json` as `%USERPROFILE%\.claude\themes\robco.json`
+and pick the RobCo theme with `/theme`. It draws your own messages on a hidden marker colour, which the
 shader finds and turns a yellow-green, so you can tell your lines from Claude's at a glance.
 
 ## Tuning
