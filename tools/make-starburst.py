@@ -1,8 +1,8 @@
-"""Draws the starburst picture used as the terminal background.
+"""Draws the picture used as the terminal background: the starburst as a flower.
 
-Our own drawing, in the spirit of the Claude spark: uneven rays of different
-lengths and widths, meeting in the middle. Shaded as a raised, rounded shape lit
-from the upper left, with a fine grain on its surface, so it has depth and texture.
+Our own drawing, in the spirit of the Claude spark: the same uneven rays, but each ray
+is a petal (narrow at the middle, wide and rounded at the end, a vein down the centre)
+around a seeded flower heart. Flat 2D, like a drawing, not lit like an object.
 Grey on black; the shader turns it green, adds the stripes and the rolling light.
 
     python tools/make-starburst.py  ->  styles/green-monitor-starburst/starburst.png
@@ -11,145 +11,93 @@ import math
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image
 
 SIZE = 1024            # finished picture, square, in pixels
-SUPERSAMPLE = 4        # draw bigger, then shrink, for smooth edges
+SUPERSAMPLE = 2        # draw bigger, then shrink, for smooth edges
 RAY_COUNT = 12
-INNER_RADIUS = 0.05    # fraction of the picture; where each ray starts (near the middle)
-# per ray: (length, width at the base, angle nudge in degrees); uneven on purpose
+# per petal: (length, widest width, angle nudge in degrees); uneven on purpose, like the spark
 RAYS = [
-    (0.40, 0.105, 0), (0.33, 0.095, 5), (0.38, 0.100, -4), (0.31, 0.090, 3),
-    (0.39, 0.105, -3), (0.34, 0.095, 6), (0.41, 0.105, 1), (0.32, 0.090, -5),
-    (0.37, 0.100, 4), (0.35, 0.095, -2), (0.40, 0.100, 3), (0.30, 0.090, -6),
+    (0.46, 0.16, 0), (0.39, 0.14, 5), (0.44, 0.15, -4), (0.37, 0.13, 3),
+    (0.45, 0.16, -3), (0.40, 0.14, 6), (0.47, 0.16, 1), (0.38, 0.13, -5),
+    (0.43, 0.15, 4), (0.41, 0.14, -2), (0.46, 0.15, 3), (0.36, 0.13, -6),
 ]
-TIP_WIDTH = 0.85       # tip width as a fraction of the base width (rounded tip)
-SOFTEN = 1.2           # final blur radius in pixels, so the edges are not razor sharp
+PETAL_START = 0.04     # where petals begin, from the middle (fraction of the picture)
+WIDEST_AT = 0.62       # how far along the petal it is widest (0 = base, 1 = tip)
+TIP_ROUND = 0.55       # lower = rounder, fuller tip; higher = more pointed
 
-# depth and texture
-CORE_RADIUS = 0.10     # the round middle, as a fraction of the picture
-CORE_FLATTEN = 1.0     # how domed the middle is compared with the rays (1 = a full ball)
-BLEND = 30             # pixels; how smoothly rays flow into each other (0 = hard joins)
-LIGHT_DIR = (-0.6, -0.7, 0.45)   # light from the upper left, a little in front
-AMBIENT = 0.18         # brightness of the side facing away from the light
-SHINE = 0.55           # strength of the glossy highlight
-SHINE_TIGHTNESS = 30   # higher = smaller, sharper highlight
-GRAIN = 0.10           # fine surface grain (0 = smooth)
-MOTTLE = 0.14          # larger soft blotches, like worn metal
-MOTTLE_SIZE = 9        # pixels; size of the blotches
-CREASE = 0.25          # darkening in the grooves where rays meet (0 = none)
-CREASE_WIDTH = 10      # pixels; how wide those grooves are
-SMOOTH = 4.0           # pixels; evens out the surface so the joins do not sparkle
+PETAL_BASE_TONE = 0.45 # brightness of a petal where it meets the heart
+PETAL_TIP_TONE = 0.95  # brightness at the petal's outer end
+OUTLINE = 3.0          # pixels; dark line round each petal so overlapping petals read apart
+VEIN_WIDTH = 2.2       # pixels; the centre vein
+VEIN_DARKEN = 0.30
+SIDE_VEINS = 5         # faint veins branching off the centre one, per side
+SIDE_VEIN_DARKEN = 0.07
+
+HEART_RADIUS = 0.085   # the flower's middle (fraction of the picture)
+HEART_TONE = 0.85
+SEEDS = 60             # dots in the middle, laid out in a sunflower spiral
+SEED_SIZE = 0.0070     # dot radius (fraction of the picture)
+SEED_DARKEN = 0.45
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "styles",
                    "green-monitor-starburst", "starburst.png")
 
 
-def ray_polygon(cx, cy, angle, r0, r1, w0, w1, steps=12):
-    """A tapered ray from radius r0 to r1 with a round cap at the far end."""
+def petal(x, y, angle, length, width, size):
+    """Returns (coverage 0..1, tone) for one petal over the whole picture."""
     dx, dy = math.cos(angle), math.sin(angle)
-    nx, ny = -dy, dx
-    pts = [(cx + dx * r0 + nx * w0 / 2, cy + dy * r0 + ny * w0 / 2)]
-    tipx, tipy = cx + dx * r1, cy + dy * r1
-    for i in range(steps + 1):  # half circle round the tip
-        a = math.pi / 2 - math.pi * i / steps
-        pts.append((tipx + (nx * math.sin(a) + dx * math.cos(a)) * w1 / 2,
-                    tipy + (ny * math.sin(a) + dy * math.cos(a)) * w1 / 2))
-    pts.append((cx + dx * r0 - nx * w0 / 2, cy + dy * r0 - ny * w0 / 2))
-    return pts
+    r0, r1 = PETAL_START * size, length * size
+    u = (x * dx + y * dy - r0) / (r1 - r0)         # 0 at the base, 1 at the tip
+    v = -x * dy + y * dx                           # pixels sideways from the centre line
+    t = np.clip(u, 0, 1)
+    # one smooth teardrop curve: grows from nothing, widest at WIDEST_AT, closes at the tip
+    b = TIP_ROUND
+    a = b * WIDEST_AT / (1 - WIDEST_AT)
+    peak = WIDEST_AT ** a * (1 - WIDEST_AT) ** b
+    half = width * size / 2 * t ** a * (1 - t) ** b / peak
+    edge = half - np.abs(v)                        # pixels inside the edge
+    inside = (u > 0) & (u < 1)
+    cover = np.clip(edge + 0.5, 0, 1) * inside
 
-
-def blurred_noise(rng, shape, radius):
-    n = rng.standard_normal(shape)
-    img = Image.fromarray(((n * 40) + 128).clip(0, 255).astype(np.uint8))
-    n = np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float64) - 128
-    return n / (np.abs(n).max() + 1e-9)
-
-
-def soft_max(a, b, k):
-    """Like max(a, b), but rounds off the join so two shapes flow into one."""
-    h = np.clip(k - np.abs(a - b), 0, None) / k
-    return np.maximum(a, b) + h * h * k / 4 * np.clip(np.minimum(a, b) / k, 0, 1)
-
-
-def blur(a, radius):
-    """Gaussian blur in full precision (an 8-bit blur leaves ripples in the lighting)."""
-    r = int(radius * 3) + 1
-    k = np.exp(-(np.arange(-r, r + 1) / radius) ** 2 / 2)
-    k /= k.sum()
-    a = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 0, a)
-    return np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 1, a)
-
-
-def tube_height(size):
-    """Height of the shape: each ray is a rounded tube, the middle a low dome.
-    Where they overlap the taller one wins, which leaves a groove at the join."""
-    y, x = np.mgrid[0:size, 0:size].astype(np.float64) + 0.5
-    x -= size / 2
-    y -= size / 2
-    height = np.zeros((size, size))
-    groove = np.full((size, size), np.inf)
-    for i, (length, width, nudge) in enumerate(RAYS[:RAY_COUNT]):
-        a = math.radians(i * 360 / RAY_COUNT + nudge - 90)
-        dx, dy = math.cos(a), math.sin(a)
-        r0, r1 = INNER_RADIUS * size, length * size
-        t = np.clip((x * dx + y * dy - r0) / (r1 - r0), 0, 1)
-        px, py = x - (r0 + t * (r1 - r0)) * dx, y - (r0 + t * (r1 - r0)) * dy
-        half = width * size / 2 * (1 - t * (1 - TIP_WIDTH))
-        h = np.sqrt(np.clip(half ** 2 - (px ** 2 + py ** 2), 0, None))
-        groove = np.minimum(groove, np.abs(h - height) + (h <= 0) * 1e9 + (height <= 0) * 1e9)
-        height = soft_max(height, h, BLEND)
-    core = CORE_RADIUS * size
-    h = np.sqrt(np.clip(core ** 2 - (x ** 2 + y ** 2), 0, None)) * CORE_FLATTEN
-    groove = np.minimum(groove, np.abs(h - height) + (h <= 0) * 1e9 + (height <= 0) * 1e9)
-    height = soft_max(height, h, BLEND)
-    return height, groove
-
-
-def blurred_noise(rng, shape, radius):
-    n = rng.standard_normal(shape)
-    img = Image.fromarray(((n * 40) + 128).clip(0, 255).astype(np.uint8))
-    n = np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float64) - 128
-    return n / (np.abs(n).max() + 1e-9)
-
-
-def shade(mask):
-    """Turns the flat white shape into a lit, rounded, textured one."""
-    rng = np.random.default_rng(7)  # fixed seed: same picture every run
-    height, groove = tube_height(mask.shape[0])
-    smooth = blur(height, SMOOTH)
-
-    gy, gx = np.gradient(smooth)
-    n = np.dstack([-gx, -gy, np.ones_like(gx)])
-    n /= np.linalg.norm(n, axis=2, keepdims=True)
-    light = np.array(LIGHT_DIR) / np.linalg.norm(LIGHT_DIR)
-    diffuse = np.clip(n @ light, 0, 1)
-    half = light + np.array([0, 0, 1.0])
-    half /= np.linalg.norm(half)
-    shine = np.clip(n @ half, 0, 1) ** SHINE_TIGHTNESS
-    crease = np.exp(-(groove / CREASE_WIDTH) ** 2)
-
-    tone = AMBIENT + (1 - AMBIENT) * diffuse
-    tone *= 1 + GRAIN * blurred_noise(rng, mask.shape, 0.8) + MOTTLE * blurred_noise(rng, mask.shape, MOTTLE_SIZE)
-    tone *= 1 - CREASE * crease
-    tone += SHINE * shine
-    return np.clip(tone, 0, 1) * mask
+    tone = PETAL_BASE_TONE + (PETAL_TIP_TONE - PETAL_BASE_TONE) * t
+    tone = tone * (1 - VEIN_DARKEN * np.exp(-(v / VEIN_WIDTH) ** 2) * (1 - t * 0.7))
+    along = u * (r1 - r0) - np.abs(v) * 1.3        # side veins slope out towards the tip
+    side = np.exp(-((np.mod(along, (r1 - r0) / SIDE_VEINS) - 4) / 1.6) ** 2)
+    tone = tone * (1 - SIDE_VEIN_DARKEN * side * (np.abs(v) < half * 0.85))
+    tone = tone * np.clip(edge / OUTLINE, 0.15, 1)  # dark rim
+    return cover, tone
 
 
 def main():
-    big = SIZE * SUPERSAMPLE
-    img = Image.new("L", (big, big), 0)
-    draw = ImageDraw.Draw(img)
-    c = big / 2
-    for i, (length, width, nudge) in enumerate(RAYS[:RAY_COUNT]):
+    size = SIZE * SUPERSAMPLE
+    y, x = np.mgrid[0:size, 0:size].astype(np.float64) + 0.5 - size / 2
+    img = np.zeros((size, size))
+
+    # longest petals last so they sit on top, like a real flower's front row
+    order = sorted(range(RAY_COUNT), key=lambda i: RAYS[i][0])
+    for i in order:
+        length, width, nudge = RAYS[i]
         angle = math.radians(i * 360 / RAY_COUNT + nudge - 90)
-        w0 = width * big
-        draw.polygon(ray_polygon(c, c, angle, INNER_RADIUS * big, length * big,
-                                 w0, w0 * TIP_WIDTH), fill=255)
-    draw.ellipse([c - 0.11 * big, c - 0.11 * big, c + 0.11 * big, c + 0.11 * big], fill=255)
-    img = img.resize((SIZE, SIZE), Image.LANCZOS).filter(ImageFilter.GaussianBlur(SOFTEN))
-    shaded = shade(np.asarray(img, dtype=np.float64) / 255)
-    Image.fromarray((shaded * 255).astype(np.uint8)).convert("RGB").save(OUT)
+        cover, tone = petal(x, y, angle, length, width, size)
+        img = img * (1 - cover) + tone * cover
+
+    r = np.hypot(x, y)
+    heart_r = HEART_RADIUS * size
+    cover = np.clip(heart_r - r + 0.5, 0, 1)
+    tone = HEART_TONE * np.clip((heart_r - r) / (OUTLINE * SUPERSAMPLE), 0.15, 1)
+    golden = math.pi * (3 - math.sqrt(5))
+    seed_r = SEED_SIZE * size
+    for k in range(SEEDS):
+        rr = heart_r * 0.86 * math.sqrt((k + 0.5) / SEEDS)
+        sx, sy = rr * math.cos(k * golden), rr * math.sin(k * golden)
+        d = np.hypot(x - sx, y - sy)
+        tone = tone * (1 - SEED_DARKEN * np.clip(seed_r - d + 0.5, 0, 1))
+    img = img * (1 - cover) + tone * cover
+
+    small = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8))
+    small = small.resize((SIZE, SIZE), Image.LANCZOS)
+    small.convert("RGB").save(OUT)
     print("wrote", os.path.normpath(OUT))
 
 

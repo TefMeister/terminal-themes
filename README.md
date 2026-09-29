@@ -9,7 +9,7 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 
 | Style | What it looks like |
 | --- | --- |
-| [`green-monitor-starburst`](styles/green-monitor-starburst/) | **The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a faint striped starburst behind the text (rounded and lit, with a grainy metal surface) with a light that slowly runs down the screen over it. |
+| [`green-monitor-starburst`](styles/green-monitor-starburst/) | **The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a faint striped starburst behind the text, drawn as a flower with the rays as petals, with a light that slowly runs down the screen over it. |
 | [`green-monitor`](styles/green-monitor/) | The same monitor without a picture: fine scanlines over the whole screen, a lighter band and the rolling light. |
 | [`sharp-scanlines`](styles/sharp-scanlines/) | The simplest one: dark scanlines only, letters stay crisp. Pair it with any colour scheme. |
 
