@@ -1,7 +1,7 @@
 """Draws the picture used as the terminal background: the starburst as a flower.
 
-Our own drawing, in the spirit of the Claude spark: the same uneven rays, but each ray
-is a petal (narrow at the middle, wide and rounded at the end, a vein down the centre)
+Our own drawing, in the spirit of the Claude spark: the rays placed and sized like the logo's, but each
+ray is a petal (narrow at the middle, wide and rounded at the end, a vein down the centre)
 around a seeded flower heart. Flat 2D, like a drawing, not lit like an object.
 Grey on black; the shader turns it green, adds the stripes and the rolling light.
 
@@ -15,13 +15,14 @@ from PIL import Image
 
 SIZE = 1024            # finished picture, square, in pixels
 SUPERSAMPLE = 2        # draw bigger, then shrink, for smooth edges
-RAY_COUNT = 12
-# per petal: (length, widest width, angle nudge in degrees); uneven on purpose, like the spark
+# per petal: (direction in degrees, clockwise from straight up; length compared with the
+# longest; widest width). Directions and lengths measured from the Claude logo itself.
 RAYS = [
-    (0.46, 0.16, 0), (0.39, 0.14, 5), (0.44, 0.15, -4), (0.37, 0.13, 3),
-    (0.45, 0.16, -3), (0.40, 0.14, 6), (0.47, 0.16, 1), (0.38, 0.13, -5),
-    (0.43, 0.15, 4), (0.41, 0.14, -2), (0.46, 0.15, 3), (0.36, 0.13, -6),
+    (6, 0.87, 0.105), (38, 0.90, 0.105), (80, 0.89, 0.105), (103, 0.91, 0.105),
+    (132, 0.94, 0.105), (148, 0.92, 0.10), (183, 0.95, 0.105), (212, 0.96, 0.105),
+    (234, 0.91, 0.10), (267, 0.95, 0.105), (299, 0.95, 0.105), (329, 1.00, 0.105),
 ]
+LONGEST = 0.47         # the longest petal, as a fraction of the picture
 PETAL_START = 0.04     # where petals begin, from the middle (fraction of the picture)
 WIDEST_AT = 0.62       # how far along the petal it is widest (0 = base, 1 = tip)
 TIP_ROUND = 0.55       # lower = rounder, fuller tip; higher = more pointed
@@ -75,11 +76,9 @@ def main():
     img = np.zeros((size, size))
 
     # longest petals last so they sit on top, like a real flower's front row
-    order = sorted(range(RAY_COUNT), key=lambda i: RAYS[i][0])
-    for i in order:
-        length, width, nudge = RAYS[i]
-        angle = math.radians(i * 360 / RAY_COUNT + nudge - 90)
-        cover, tone = petal(x, y, angle, length, width, size)
+    for direction, length, width in sorted(RAYS, key=lambda r: r[1]):
+        angle = math.radians(direction - 90)
+        cover, tone = petal(x, y, angle, length * LONGEST, width, size)
         img = img * (1 - cover) + tone * cover
 
     r = np.hypot(x, y)
