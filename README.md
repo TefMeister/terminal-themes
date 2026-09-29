@@ -20,8 +20,9 @@ size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `
 ## Install (green-monitor-starburst)
 
 1. Download or clone this repo somewhere that will stay put.
-2. Install the free font [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono)
-   (or change the font in step 4 to one you have).
+2. Install the font: open [`fonts/ShareTechMono-Regular.ttf`](fonts/ShareTechMono-Regular.ttf) and
+   click **Install**. It is free and included here under its open licence (see below). You can also get
+   it from [Google Fonts](https://fonts.google.com/specimen/Share+Tech+Mono).
 3. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
 4. From [`profile-snippet.json`](styles/green-monitor-starburst/profile-snippet.json), paste the
    `profile` into `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where
@@ -54,5 +55,11 @@ will be fixed quickly.
 ## Credits
 
 - **Windows Terminal** (Microsoft) for the pixel-shader feature these styles are built on.
-- **Share Tech Mono** by Carrois Apostrophe, under the SIL Open Font License.
+- **Share Tech Mono**, the font these styles use, designed by **Ralph du Carrois / Carrois Type Design**
+  (now Carrois Apostrophe), [carrois.com](https://www.carrois.com). Free under the SIL Open Font
+  License 1.1; the font file is included unchanged in [`fonts/`](fonts/) with its licence,
+  [`fonts/OFL.txt`](fonts/OFL.txt). "Share" is a Reserved Font Name of its creator.
 - Styles designed by Tefa, written by Claude.
+
+If we used your work and you are not credited here, or credited wrongly, please open an issue and
+we will fix it as soon as possible.
