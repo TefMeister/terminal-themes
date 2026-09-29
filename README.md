@@ -1,4 +1,4 @@
-# Terminal styles
+# Terminal themes
 
 A collection of looks for **Windows Terminal**, mostly made for running Claude Code in. Each style is a
 small shader (a file that repaints the terminal window) plus a colour scheme.
@@ -26,7 +26,7 @@ size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `
 3. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
 4. From [`profile-snippet.json`](styles/green-monitor-starburst/profile-snippet.json), paste the
    `profile` into `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where
-   you put this repo, **written with forward slashes** (`C:/Users/you/terminal-styles`).
+   you put this repo, **written with forward slashes** (`C:/Users/you/terminal-themes`).
 5. Open a new tab with the **Green Monitor Claude** profile.
 
 **Optional, for Claude Code:** save `claude-theme-robco.json` as `%USERPROFILE%\.claude\themes\robco.json`
