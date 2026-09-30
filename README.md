@@ -12,6 +12,9 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 | [`green-monitor-starburst`](styles/green-monitor-starburst/) | **The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a faint striped starburst behind the text, drawn as a flower with the rays as petals, with a light that slowly runs down the screen over it. |
 | [`green-monitor`](styles/green-monitor/) | The same monitor without a picture: fine scanlines over the whole screen, a lighter band and the rolling light. |
 | [`sharp-scanlines`](styles/sharp-scanlines/) | The simplest one: dark scanlines only, letters stay crisp. Pair it with any colour scheme. |
+| [`aquarium`](styles/aquarium/) | **New, still being tuned.** A calm pixel-art fish tank behind the text, moving at about 5 frames a second: light blue water that fades to black at the sides, a sea floor rolling into the distance, swaying plants, rocks, rising bubbles, a crab, and two each of seven kinds of fish. The fish swim sideways, turn, swim away (tail swinging) and come back towards you head-on, passing behind and in front of the plants. |
+
+![The aquarium style](preview/aquarium.png)
 
 **Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
@@ -44,6 +47,19 @@ the theme is a still picture.
 **Optional, for Claude Code:** save `claude-theme-robco.json` as `%USERPROFILE%\.claude\themes\robco.json`
 and pick the RobCo theme with `/theme`. It draws your own messages on a hidden marker colour, which the
 shader finds and turns a yellow-green, so you can tell your lines from Claude's at a glance.
+
+## Install (aquarium)
+
+1. Download or clone this repo somewhere that will stay put.
+2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
+3. From [`profile-snippet.json`](styles/aquarium/profile-snippet.json), paste the `profile` into
+   `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
+   repo, **written with forward slashes**. The font, Cascadia Code, comes with Windows Terminal.
+4. Open a new tab with the **Aquarium Claude** profile.
+
+The fish, plants and rocks are drawn in code by `styles/aquarium/aquarium-sprites.py` (needs
+Pillow), which rewrites `aquarium-sheet.png` next to it. If you change the sheet's layout, change
+the matching numbers at the top of `aquarium.hlsl` too.
 
 ## Tuning
 
