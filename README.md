@@ -7,7 +7,8 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 
 ## The styles
 
-Each style below has a short recording of it running, with a few lines of sample text.
+Each style below has a short recording of it running, with a few lines of sample text. Every clip is
+an exact loop: its last frame runs straight into its first.
 
 ### [`green-monitor-starburst`](styles/green-monitor-starburst/)
 
@@ -42,9 +43,8 @@ colourful it gets.
 
 ![The aquarium style, moving](preview/aquarium.gif)
 
-The clip above is one exact loop: in the terminal the tank never repeats, but for recording it has a
-loop mode (`LOOP_SECONDS` at the top of `aquarium.hlsl`) that makes every movement repeat on the
-dot, so the last frame joins the first without a seam.
+In the terminal the tank never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top
+of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joins up without a seam.
 
 **Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
@@ -102,6 +102,8 @@ Save the file and Windows Terminal reloads it straight away.
 - `python tools/make-starburst.py` redraws `starburst.png` (needs Pillow).
 - `python tools/gif-to-sheet.py` turns a GIF into a frame sheet (see "Or a moving one" above).
 - `python tools/make-preview.py` redraws the preview at the top of this page (needs Pillow and NumPy).
+- The looping clips are recorded with the scripts in [`tools/preview-clips/`](tools/preview-clips/); its
+  README has the steps.
 
 ## Disclaimer
 
