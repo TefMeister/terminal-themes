@@ -72,7 +72,12 @@ static const float  TURN_SECONDS   = 1.2;    // time spent turning between side-
 static const float  TURN_THIN      = 0.25;   // how thin the side view gets at the middle of a turn   // depth change needed before we see a fish head-on or from behind
 static const float  FAR_FISH_HAZE  = 0.6;    // how much the furthest fish melt into the water
 static const float  FISH_BOB       = 1.5;    // cells of gentle up and down bobbing
-static const float  FISH_DIM       = 0.85;
+static const float  FISH_DIM       = 0.85;   // the crab's brightness
+// fish brightness and colour strength by distance: dim and washed out far away, bright and vivid close up
+static const float  FISH_FAR_BRIGHT  = 0.50;
+static const float  FISH_NEAR_BRIGHT = 1.20;
+static const float  FISH_FAR_SAT     = 0.70;  // 1 = the sprite's own colours, below 1 = greyer
+static const float  FISH_NEAR_SAT    = 1.30;  // above 1 = more vivid
 
 // --- crab ---
 static const float  CRAB_WANDER    = 0.22;   // share of the width it walks back and forth over
@@ -245,7 +250,12 @@ void gatherFish(int2 cell, float2 grid, float top, float sand, float horizon, fl
         if (p.z > best[layer])
         {
             best[layer] = p.z;
-            slot[layer] = float4(lerp(t.rgb * FISH_DIM, water, (1.0 - p.z) * FAR_FISH_HAZE), 1.0);
+            // near fish: brighter and more vivid; far fish: darker, greyer, then melted into the water
+            float3 c    = t.rgb;
+            float  grey = dot(c, float3(0.299, 0.587, 0.114));
+            c = lerp(grey.xxx, c, lerp(FISH_FAR_SAT, FISH_NEAR_SAT, p.z));
+            c = saturate(c * lerp(FISH_FAR_BRIGHT, FISH_NEAR_BRIGHT, p.z));
+            slot[layer] = float4(lerp(c, water, (1.0 - p.z) * FAR_FISH_HAZE), 1.0);
         }
     }
 }
