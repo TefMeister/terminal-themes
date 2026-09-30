@@ -3,6 +3,9 @@
 // user-message colour as green-monitor/robco.hlsl, but the scanlines live on the picture.
 // The picture comes from the profile's "experimental.pixelShaderImagePath"
 // (starburst.png by default; any picture works, it is turned green here).
+// Moving pictures: tools/gif-to-sheet.py lays a GIF's frames out in a grid on one picture,
+// and the four SHEET/FRAME numbers below tell the shader how to flip through them.
+// Left at 1 / 1 / 1 they mean "a normal still picture".
 Texture2D shaderTexture;
 Texture2D image;
 SamplerState samplerState;
@@ -25,6 +28,11 @@ static const float  STRIPE_DARKEN = 0.55;   // how dark the dark stripe is
 static const float  ROLL_SECONDS  = 9.0;    // time for the light bar to travel top to bottom
 static const float  ROLL_HEIGHT   = 0.10;   // bar height (fraction of the screen)
 static const float  ROLL_STRENGTH = 0.55;   // how much the bar lights the picture up
+
+static const uint   SHEET_COLS    = 1;      // frames per row in a frame sheet (1 = still picture)
+static const uint   SHEET_ROWS    = 1;      // rows of frames in a frame sheet (1 = still picture)
+static const uint   FRAME_COUNT   = 1;      // frames used (the last row may be part-empty)
+static const float  FRAME_SECONDS = 0.08;   // how long each frame shows
 
 static const float3 MARKER        = float3(0.0, 0.0, 3.0 / 255.0); // user-message background
 static const float3 USER_GREEN    = float3(0.80, 1.00, 0.45);      // colour of the user's text
@@ -67,6 +75,8 @@ float2 picture(float4 pos)
     float w, h;
     image.GetDimensions(w, h);
     if (w < 1 || h < 1) return float2(0, 0);
+    w /= SHEET_COLS;
+    h /= SHEET_ROWS;
 
     float picH = Resolution.y * PIC_SIZE;
     float picW = picH * (w / h);
@@ -75,7 +85,11 @@ float2 picture(float4 pos)
     float2 uv  = float2((pos.x - left) / picW, (pos.y - top) / picH);
     if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1) return float2(0, 0);
 
-    float3 p = image.Sample(samplerState, uv).rgb;
+    // pick this moment's frame, staying half a pixel inside it so neighbours never bleed in
+    uint   frame = min((uint)(frac(Time / (FRAME_SECONDS * FRAME_COUNT)) * FRAME_COUNT), FRAME_COUNT - 1);
+    float2 cell  = float2(frame % SHEET_COLS, frame / SHEET_COLS);
+    float2 inner = clamp(uv, 0.5 / float2(w, h), 1.0 - 0.5 / float2(w, h));
+    float3 p = image.Sample(samplerState, (cell + inner) / float2(SHEET_COLS, SHEET_ROWS)).rgb;
     float  l = dot(p, float3(0.299, 0.587, 0.114));
     l = saturate(pow(l, PIC_CONTRAST) * 1.25);
     float fade = smoothstep(0, PIC_EDGE_FADE, uv.x) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.x);
