@@ -13,9 +13,21 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 | [`green-monitor`](styles/green-monitor/) | The same monitor without a picture: fine scanlines over the whole screen, a lighter band and the rolling light. |
 | [`sharp-scanlines`](styles/sharp-scanlines/) | The simplest one: dark scanlines only, letters stay crisp. Pair it with any colour scheme. |
 
-**Swap the picture:** the starburst style will take any picture. Point
+**Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
 size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `PIC_Y`).
+
+**Or a moving one (GIF):** Windows Terminal cannot play a GIF behind a shader, so the frames are laid
+out on one picture and the shader flips through them.
+
+1. Run `python tools/gif-to-sheet.py my.gif my-sheet.png` (needs Pillow). It makes the sheet and
+   prints four numbers.
+2. Put those numbers at the top of `starburst.hlsl` (`SHEET_COLS`, `SHEET_ROWS`, `FRAME_COUNT`,
+   `FRAME_SECONDS`).
+3. Point `experimental.pixelShaderImagePath` at `my-sheet.png`.
+
+To go back to a still picture, set the first three numbers back to `1`. The flower that comes with
+the theme is a still picture.
 
 ## Install (green-monitor-starburst)
 
@@ -42,6 +54,7 @@ Save the file and Windows Terminal reloads it straight away.
 ## Remaking the pictures
 
 - `python tools/make-starburst.py` redraws `starburst.png` (needs Pillow).
+- `python tools/gif-to-sheet.py` turns a GIF into a frame sheet (see "Or a moving one" above).
 - `python tools/make-preview.py` redraws the preview at the top of this page (needs Pillow and NumPy).
 
 ## Disclaimer
