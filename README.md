@@ -7,14 +7,40 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 
 ## The styles
 
-| Style | What it looks like |
-| --- | --- |
-| [`green-monitor-starburst`](styles/green-monitor-starburst/) | **The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a faint striped starburst behind the text, drawn as a flower with the rays as petals, with a light that slowly runs down the screen over it. |
-| [`green-monitor`](styles/green-monitor/) | The same monitor without a picture: fine scanlines over the whole screen, a lighter band and the rolling light. |
-| [`sharp-scanlines`](styles/sharp-scanlines/) | The simplest one: dark scanlines only, letters stay crisp. Pair it with any colour scheme. |
-| [`aquarium`](styles/aquarium/) | **New, still being tuned.** A calm pixel-art fish tank behind the text, moving at about 5 frames a second: light blue water that fades to black at the sides, a sea floor rolling into the distance, swaying plants, rocks, rising bubbles, a crab, and two each of seven kinds of fish. The fish swim sideways, turn, swim away (tail swinging) and come back towards you head-on, passing behind and in front of the plants. Far-off fish are dim and grey; the closer one swims, the brighter and more colourful it gets. |
+Each style below has a short recording of it running, with a few lines of sample text.
 
-![The aquarium style](preview/aquarium.png)
+### [`green-monitor-starburst`](styles/green-monitor-starburst/)
+
+**The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a
+faint striped starburst behind the text, drawn as a flower with the rays as petals, with a light that
+slowly runs down the screen over it.
+
+![The green monitor starburst style, moving](preview/green-monitor-starburst.gif)
+
+### [`green-monitor`](styles/green-monitor/)
+
+The same monitor without a picture: fine scanlines over the whole screen, a lighter band and the
+rolling light.
+
+![The green monitor style, moving](preview/green-monitor.gif)
+
+### [`sharp-scanlines`](styles/sharp-scanlines/)
+
+The simplest one: dark scanlines only, letters stay crisp. Pair it with any colour scheme. Shown here
+at full size on the terminal's own Campbell scheme, so the lines are visible.
+
+![The sharp scanlines style, moving](preview/sharp-scanlines.gif)
+
+### [`aquarium`](styles/aquarium/)
+
+**New, still being tuned.** A calm pixel-art fish tank behind the text, moving at about 5 frames a
+second: light blue water that fades to black at the sides, a sea floor rolling into the distance,
+swaying plants, rocks, rising bubbles, a crab, and two each of seven kinds of fish. The fish swim
+sideways, turn, swim away (tail swinging) and come back towards you head-on, passing behind and in
+front of the plants. Far-off fish are dim and grey; the closer one swims, the brighter and more
+colourful it gets.
+
+![The aquarium style, moving](preview/aquarium.gif)
 
 **Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
