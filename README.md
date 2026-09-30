@@ -42,6 +42,10 @@ colourful it gets.
 
 ![The aquarium style, moving](preview/aquarium.gif)
 
+The clip above is one exact loop: in the terminal the tank never repeats, but for recording it has a
+loop mode (`LOOP_SECONDS` at the top of `aquarium.hlsl`) that makes every movement repeat on the
+dot, so the last frame joins the first without a seam.
+
 **Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
 size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `PIC_Y`).

@@ -89,6 +89,14 @@ static const int    BUBBLES_EACH   = 4;
 static const float  BUBBLE_RISE    = 0.06;   // trips per second from floor to surface
 static const float3 BUBBLE_COLOUR  = float3(0.35, 0.58, 0.65);
 
+// --- looping, for recording a clip ---
+// 0 = off: the tank runs freely, as it should in the terminal. Set it to a number of seconds and
+// everything that moves repeats exactly that often, so a recording of that length loops without a
+// seam: fish swim there and back, and every rate is snapped to one that fits the loop. Use a
+// multiple of PLANT_FRAMES / FPS (3.2 s); 32 works well.
+static const float  LOOP_SECONDS   = 0.0;
+static const float  TAU            = 6.28318530718;
+
 // --- user messages (same marker the Matrix Claude theme uses) ---
 static const float3 MARKER         = float3(0.0, 0.0, 3.0 / 255.0);
 static const float3 USER_COLOUR    = float3(1.00, 0.78, 0.55);
@@ -102,6 +110,11 @@ float hash2(float2 p) { return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758
 int pmod(int a, int n) { int m = a % n; return m < 0 ? m + n : m; }
 
 float dither(int2 c) { return (BAYER[(c.y & 3) * 4 + (c.x & 3)] + 0.5) / 16.0; }
+
+// in loop mode, snap a rate (radians per second) or a frequency (trips per second) to the nearest
+// one that fits the loop exactly; otherwise leave it alone
+float loopRate(float w) { return LOOP_SECONDS > 0.0 ? max(1.0, round(w * LOOP_SECONDS / TAU)) * TAU / max(LOOP_SECONDS, 1.0) : w; }
+float loopFreq(float f) { return LOOP_SECONDS > 0.0 ? max(1.0, round(f * LOOP_SECONDS)) / max(LOOP_SECONDS, 1.0) : f; }
 
 bool isMarker(float3 c) { return all(abs(c - MARKER) < 0.5 / 255.0); }
 float ink(float3 c) { return saturate(max(c.r, max(c.g, c.b))); }
@@ -169,20 +182,44 @@ float tri(float p) { return 1.0 - abs(2.0 * frac(p) - 1.0); }
 // squeeze: how wide the side view is drawn (1 = normal); narrowing it reads as the fish turning.
 void fishPose(int k, float T, out float3 p, out int view, out bool right, out float squeeze)
 {
-    float fk   = (float)k;
-    float side = SIDE_SECONDS  * lerp(0.7, 1.3, hash(fk * 1.7));
-    float deep = DEPTH_SECONDS * lerp(0.7, 1.3, hash(fk * 2.3));
-    float cyc  = side + deep;
-    float t    = T + hash(fk * 6.1) * 500.0;
-    float m    = floor(t / cyc);
-    float a    = t - m * cyc;
-    float step = FISH_STEP * lerp(0.6, 1.4, hash(fk * 4.3));
-    float c0   = hash(fk * 8.1);
-    // the sideways path bounces back and forth across the tank, so fish turn around at the ends
-    float x0 = tri(c0 + m * step),                x1 = tri(c0 + (m + 1.0) * step);
-    float z0 = hash(fk * 3.9 + frac(m * 0.137) * 91.0), z1 = hash(fk * 3.9 + frac((m + 1.0) * 0.137) * 91.0);
-    float y0 = hash(fk * 5.3 + frac(m * 0.211) * 73.0), y1 = hash(fk * 5.3 + frac((m + 1.0) * 0.211) * 73.0);
-    float x2 = tri(c0 + (m + 2.0) * step);
+    float fk = (float)k;
+    float side, deep, cyc, a, x0, x1, x2, z0, z1, y0, y1;
+    if (LOOP_SECONDS > 0.0)
+    {
+        // loop mode: there and back between two spots. A slow fish makes 2 legs per loop, a quick
+        // one 4, so every fish is exactly where it started when the loop comes round.
+        float legs = hash(fk * 2.3) < 0.5 ? 2.0 : 4.0;
+        cyc  = LOOP_SECONDS / legs;
+        side = cyc * SIDE_SECONDS / (SIDE_SECONDS + DEPTH_SECONDS);
+        deep = cyc - side;
+        float t  = T + hash(fk * 6.1) * LOOP_SECONDS;
+        float m  = floor(t / cyc);
+        a        = t - m * cyc;
+        bool going = m - 2.0 * floor(m * 0.5) < 0.5;             // even legs go out, odd legs come back
+        float xA = hash(fk * 8.1);
+        float xB = saturate(xA + (hash(fk * 4.3) < 0.5 ? -2.2 : 2.2) * FISH_STEP * lerp(0.6, 1.4, hash(fk * 1.7)));
+        float zA = hash(fk * 3.9), zB = hash(fk * 3.9 + 12.5);
+        float yA = hash(fk * 5.3), yB = hash(fk * 5.3 + 9.1);
+        x0 = going ? xA : xB;  x1 = going ? xB : xA;  x2 = x0;
+        z0 = going ? zA : zB;  z1 = going ? zB : zA;
+        y0 = going ? yA : yB;  y1 = going ? yB : yA;
+    }
+    else
+    {
+        side = SIDE_SECONDS  * lerp(0.7, 1.3, hash(fk * 1.7));
+        deep = DEPTH_SECONDS * lerp(0.7, 1.3, hash(fk * 2.3));
+        cyc  = side + deep;
+        float t    = T + hash(fk * 6.1) * 500.0;
+        float m    = floor(t / cyc);
+        a          = t - m * cyc;
+        float step = FISH_STEP * lerp(0.6, 1.4, hash(fk * 4.3));
+        float c0   = hash(fk * 8.1);
+        // the sideways path bounces back and forth across the tank, so fish turn around at the ends
+        x0 = tri(c0 + m * step);                x1 = tri(c0 + (m + 1.0) * step);
+        z0 = hash(fk * 3.9 + frac(m * 0.137) * 91.0); z1 = hash(fk * 3.9 + frac((m + 1.0) * 0.137) * 91.0);
+        y0 = hash(fk * 5.3 + frac(m * 0.211) * 73.0); y1 = hash(fk * 5.3 + frac((m + 1.0) * 0.211) * 73.0);
+        x2 = tri(c0 + (m + 2.0) * step);
+    }
     right = x1 >= x0;
     bool nextRight = x2 >= x1;
     view  = 0;
@@ -235,7 +272,7 @@ void gatherFish(int2 cell, float2 grid, float top, float sand, float horizon, fl
         float floorY = lerp(horizon, sand, p.z);                  // far fish stay above the far floor
         float yTop   = top + 2.0;
         float yBot   = max(yTop, floorY - h - 1.0);
-        float y      = floor(lerp(yTop, yBot, p.y) + sin(T * 0.5 + fk * 1.9) * FISH_BOB + 0.5);
+        float y      = floor(lerp(yTop, yBot, p.y) + sin(T * loopRate(0.5) + fk * 1.9) * FISH_BOB + 0.5);
         float left   = floor(p.x * grid.x - w * 0.5);
         int2  loc    = cell - int2((int)left, (int)y);
         if (loc.x < 0 || loc.y < 0 || loc.x >= w || loc.y >= h) continue;
@@ -264,8 +301,8 @@ float3 over(float3 col, float4 f) { return f.w > 0 ? f.rgb : col; }
 
 float3 drawCrab(float3 col, int2 cell, float2 grid, float sandTop, float T, int tick)
 {
-    float x = floor(grid.x * 0.4 + sin(T * CRAB_SPEED) * grid.x * CRAB_WANDER);
-    bool moving = abs(cos(T * CRAB_SPEED)) > 0.25;
+    float x = floor(grid.x * 0.4 + sin(T * loopRate(CRAB_SPEED)) * grid.x * CRAB_WANDER);
+    bool moving = abs(cos(T * loopRate(CRAB_SPEED))) > 0.25;
     int2 loc = cell - int2((int)x - FW / 2, (int)sandTop + 2 - FH);
     if (loc.x < 0 || loc.y < 0 || loc.x >= FW || loc.y >= FH) return col;
     int frame = moving ? pmod(tick, 2) : 0;
@@ -283,11 +320,11 @@ float3 drawBubbles(float3 col, int2 cell, float2 grid, float top, float bottom, 
         for (int j = 0; j < BUBBLES_EACH; j++)
         {
             float fj    = (float)j;
-            float speed = BUBBLE_RISE * (0.8 + 0.5 * hash(fi + fj * 9.0));
+            float speed = loopFreq(BUBBLE_RISE * (0.8 + 0.5 * hash(fi + fj * 9.0)));
             float phase = frac(T * speed + fj / BUBBLES_EACH + hash(fi * 5.0));
             float y     = floor(lerp(bottom, top + 1, phase));
             if (y <= top) continue;
-            float x     = sx + floor(sin(T * 1.5 + fj * 2.9 + phase * 9.0) * 1.5 + 0.5);
+            float x     = sx + floor(sin(T * loopRate(1.5) + fj * 2.9 + phase * 9.0) * 1.5 + 0.5);
             float r     = lerp(0.6, 2.2, hash(fi * 7.0 + fj)) * (0.6 + 0.5 * phase);
             float d     = length(c - float2(x, y));
             if (r < 1.0)
@@ -321,7 +358,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     bool sprites = iw == SHEET_W && ih == SHEET_H;
 
     // water line: flat, with the odd one-cell ripple drifting along it
-    float wave   = sin(cx * 0.21 + T * 1.7) + sin(cx * 0.09 - T * 1.0);
+    float wave   = sin(cx * 0.21 + T * loopRate(1.7)) + sin(cx * 0.09 - T * loopRate(1.0));
     float top    = SURFACE_ROW + (wave > 1.3 ? -1.0 : (wave < -1.3 ? 1.0 : 0.0));
     float sand   = grid.y - SAND_ROWS;
     float sandTop = sand - (hash(floor(cx / 3.0)) > 0.65 ? 1.0 : 0.0);
@@ -337,7 +374,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         col = lerp(WATER_TOP, WATER_DEEP, band);
 
         float r   = cx + cell.y * 0.45;
-        float ray = sin(r * 0.05 + T * 0.10) * sin(r * 0.11 - T * 0.07);
+        float ray = sin(r * 0.05 + T * loopRate(0.10)) * sin(r * 0.11 - T * loopRate(0.07));
         if (ray + dth * 0.35 > 0.6) col += RAY_COLOUR * (1.0 - depth);
         float3 water = col;
 
