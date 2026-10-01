@@ -26,7 +26,7 @@ static const float  CELL_PIXELS    = 3.0;    // screen pixels per chunky pixel
 static const float  FPS            = 10.0;   // how often things move per second
 static const float  FLASH_FPS      = 30.0;   // how often the lightning light changes per second
 static const float  SCENE_BRIGHT   = 0.62;   // overall picture brightness (text is not affected)
-static const float  EDGE_FADE      = 0.09;   // share of each side over which the picture fades to black
+static const float  EDGE_FADE      = 0.04;   // share of the width over which the left and right sides fade to black
 
 // --- sprite sheet layout (matches halloween-sprites.py) ---
 static const int    SHEET_W = 384, SHEET_H = 1278;
@@ -589,10 +589,10 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         col = drawCrawlers(col, cell, grid, T, tick, flash);
     }
 
-    // the picture fades to black at every edge, in dithered steps so it stays pixel-art
-    float2 u = c / grid;
-    float2 edge = min(u, 1.0 - u) / float2(EDGE_FADE * grid.y / grid.x, EDGE_FADE);
-    col *= steps(smoothstep(0.0, 1.0, saturate(min(edge.x, edge.y))), 8.0, dth);
+    // the picture fades to black in a thin strip at the left and right, where the window cuts it off,
+    // in dithered steps so it stays pixel-art; the top and bottom are drawn right to the edge
+    float ux = c.x / grid.x;
+    col *= steps(smoothstep(0.0, 1.0, saturate(min(ux, 1.0 - ux) / EDGE_FADE)), 8.0, dth);
     col = saturate(col * SCENE_BRIGHT);
 
     // letters on top, crisp; the picture fades out underneath them so they stay readable

@@ -1,7 +1,7 @@
 // Ocean: a calm pixel-art view under the sea, drawn behind the text.
 // Everything is drawn on a coarse grid of "cells" (chunky pixels) and only changes FPS times a
 // second, for a retro terminal look. Above a still, barely swaying surface near the top is daylight
-// sky with a few slow clouds; below it the water fades to black at the edges. Back to front: a sea
+// sky with a few slow clouds; below it the water, fading to black at the sides. Back to front: a sea
 // floor rolling away into the distance with faint far plants, far fish (and the whale, when it passes
 // far off), the back row of plants, middle fish (and the whale, when it passes nearer), the crab,
 // rocks and the front row of plants, near fish, then bubbles. A school of small silver fish wanders
@@ -54,7 +54,6 @@ static const float3 SAND_B         = float3(0.165, 0.130, 0.080);
 static const float3 SAND_C         = float3(0.240, 0.200, 0.130);
 static const float  SAND_ROWS      = 7.0;    // near sand depth in cells
 static const float  HORIZON        = 0.34;   // how high the far sea floor reaches (share of the water)
-static const float  EDGE_FADE      = 0.14;   // share of the width that fades to black on each side
 
 // --- plants and rocks ---
 static const int    PLANTS_FAR     = 12;     // small, hazy, on the distant floor
@@ -451,12 +450,12 @@ float4 drawSchool(int2 cell, float2 grid, float top, float horizon, float T, int
     return r;
 }
 
-// the background fades to black at every edge of the window; the letters do not
-static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
+// the background fades to black in a thin strip at the left and right edges of the window, where the
+// picture is cut off; the top and bottom are drawn right to the edge. The letters do not fade.
+static const float  SIDE_FADE     = 0.04;   // share of the width over which each side fades to black
 float screenFade(float2 tex)
 {
-    float2 e = min(tex, 1.0 - tex) / float2(SCREEN_FADE * Resolution.y / Resolution.x, SCREEN_FADE);
-    return smoothstep(0.0, 1.0, saturate(min(e.x, e.y)));
+    return smoothstep(0.0, 1.0, saturate(min(tex.x, 1.0 - tex.x) / SIDE_FADE));
 }
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
@@ -554,8 +553,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     }
 
     // fade to black at the left and right, in dithered steps so it stays pixel-art
-    float u    = (cx + 0.5) / grid.x;
-    float fade = smoothstep(0.0, EDGE_FADE, u) * smoothstep(0.0, EDGE_FADE, 1.0 - u) * screenFade(tex);
+    float fade = screenFade(tex);
     col *= saturate(floor(fade * 6.0 + dth) / 6.0) * SCENE_BRIGHT;
 
     // letters on top, crisp; the tank fades out underneath them so they stay readable
