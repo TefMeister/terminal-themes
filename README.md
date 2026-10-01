@@ -46,6 +46,20 @@ colourful it gets.
 In the terminal the tank never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top
 of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joins up without a seam.
 
+### [`halloween`](styles/halloween/)
+
+**New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
+drifting clouds and witches on brooms flying across far away, two rows of hills with dead trees and
+gravestones, a foggy field, glowing evil-eyed pumpkins along the bottom, and spiders right on the
+glass, some dangling from the top on a thread and some crawling about on the inside of the screen,
+so you see their undersides. Every 45 seconds a big old-school sheet ghost rises in the middle, its
+sheet streaming in the wind, and three lightning strikes light up the night at uneven times. Each
+flash swells, flickers and fades, and only in that light do you see the zombies walking towards you.
+
+![The Halloween style, moving](preview/halloween.gif)
+
+The clip is shortened to 30 seconds, so the ghost leaves sooner than it does in the terminal.
+
 **Use your own picture:** the starburst style takes any picture. Point
 `experimental.pixelShaderImagePath` at your own image and the shader turns it green and striped. The
 size and position are set at the top of `starburst.hlsl` (`PIC_SIZE`, `PIC_X`, `PIC_Y`).
@@ -90,6 +104,20 @@ shader finds and turns a yellow-green, so you can tell your lines from Claude's 
 The fish, plants and rocks are drawn in code by `styles/aquarium/aquarium-sprites.py` (needs
 Pillow), which rewrites `aquarium-sheet.png` next to it. If you change the sheet's layout, change
 the matching numbers at the top of `aquarium.hlsl` too.
+
+## Install (halloween)
+
+1. Download or clone this repo somewhere that will stay put.
+2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
+3. From [`profile-snippet.json`](styles/halloween/profile-snippet.json), paste the `profile` into
+   `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
+   repo, **written with forward slashes**. The font, Cascadia Code, comes with Windows Terminal.
+4. Open a new tab with the **Halloween Claude** profile.
+
+How often the ghost comes, how long it stays, how many zombies there are and the rest sit at the top
+of `halloween.hlsl`. The pumpkins, zombies, witch, spiders, trees and gravestones are drawn in code by
+`styles/halloween/halloween-sprites.py` (needs Pillow), which rewrites `halloween-sheet.png`. The
+ghost and the lightning are drawn by the shader itself.
 
 ## Tuning
 

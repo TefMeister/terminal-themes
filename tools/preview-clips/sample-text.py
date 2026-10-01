@@ -4,6 +4,7 @@
                                                    screen clears again exactly one loop later
     python sample-text.py static                   the lines appear at once and stay (for the
                                                    aquarium, whose own loop mode sets the length)
+    python sample-text.py static halloween         the same, with lines for the Halloween style
 
 The cursor is hidden throughout: a blinking cursor would never be in step with the loop.
 """
@@ -24,6 +25,17 @@ LINES = [
     ("", 0),
     ("> ", 0),
 ]
+HALLOWEEN = [
+    ("> make me a halloween theme: a big ghost, lightning, zombies, pumpkins and spiders", 0.02),
+    ("", 0),
+    ("● On it. Everything is pixel art, drawn behind your text by a small shader.", 0.015),
+    ("", 0),
+    ("● Write styles/halloween/halloween.hlsl", 0.01),
+    ("", 0),
+    ("● Done. Watch the middle of the screen when the lightning starts.", 0.015),
+    ("", 0),
+    ("> ", 0),
+]
 CLEAR = "\033[2J\033[H"
 HIDE_CURSOR = "\033[?25l"
 
@@ -34,7 +46,10 @@ def out(s):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    global LINES
     mode = sys.argv[1] if len(sys.argv) > 1 else "typing"
+    if "halloween" in sys.argv[2:]:
+        LINES = HALLOWEEN
     out(CLEAR + HIDE_CURSOR)
     if mode == "static":
         out("\n".join(text for text, _ in LINES))
