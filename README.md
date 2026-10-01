@@ -57,9 +57,10 @@ quick purple or pink flashes that light up the hut, while the chimney smoke take
 Zombies cross a foggy field, each with its own walk: some come straight at you, some at an angle,
 some shuffle sideways across the field, some with arms held out in front and some with arms
 hanging and swinging, legs stepping, each swaying its own way. Candle-lit jack-o'-lanterns stand
-among the graves, with two groups of big ones in the bottom corners turned towards the middle. Small
-spiders scurry about on the inside of the glass, so you see their undersides, curving smoothly as
-they turn, and others drop from the top on a thread.
+among the graves, with two groups of big ones in the bottom corners turned towards the middle. Now and
+then a small spider scurries across the inside of the glass, so you see its underside, curving
+smoothly as it turns; others drop from the top on a thread, and some climb the big pumpkins, squeeze
+into a mouth and come crawling out of an eye socket.
 
 Every 45 seconds the top of the sky slowly darkens and an old-school sheet ghost appears, its sheet
 streaming in the wind. Each visit is in one of ten places, near or far, big or small, drifting left
