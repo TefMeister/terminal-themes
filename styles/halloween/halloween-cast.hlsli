@@ -43,13 +43,15 @@ bool inGhost(float2 p, float T, out float lit)
     return true;
 }
 
-float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float flash, float dth)
+// the ghost, its crown at `at` and `h` cells tall. `left`: it drifts to the left, so its sheet trails
+// out to the right. `lift` brightens it to cancel the darkening that is applied after it is drawn.
+float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float flash, float dth,
+                 float2 at, float h, bool left, float lift)
 {
     if (alpha <= 0.0) return col;
-    float h = grid.y * GHOST_HEIGHT;
-    float2 crown = float2(grid.x * 0.5 + sin(T * loopRate(0.31)) * grid.x * 0.025,
-                          grid.y * GHOST_TOP + sin(T * loopRate(0.9)) * 2.5);
+    float2 crown = at + float2(sin(T * loopRate(0.31)) * h * GHOST_DRIFT_SWAY, sin(T * loopRate(0.9)) * h * 0.015);
     float2 p = (float2(cell) + 0.5 - crown) / h;
+    if (left) p.x = -p.x;
     if (p.x < -0.75 || p.x > 0.45 || p.y < -0.05 || p.y > 1.15) return col;
     // one pass over this cell and its four neighbours (to find the outline), so the shape is only
     // written out once; if the cell is outside, the last pass tests the aura instead
@@ -69,7 +71,7 @@ float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float
     if (!inside)
     {
         // a faint cold aura just outside the cloth
-        if (aura && dth < alpha * 0.6) col += float3(0.05, 0.06, 0.10) * (1.0 + flash);
+        if (aura && dth < alpha * 0.6) col += float3(0.05, 0.06, 0.10) * (1.0 + flash) * lift;
         return col;
     }
     // appear and vanish as a dissolve, not a fade, to keep it pixel-art
@@ -85,7 +87,7 @@ float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float
         q.x += q.y * 0.25 * side;                     // slanted a little, for a sad, hollow look
         if ((q.x * q.x) / (0.048 * 0.048) + (q.y * q.y) / (0.075 * 0.075) < 1.0) g = GHOST_EYE;
     }
-    g *= 1.0 + flash * 0.4;
+    g *= (1.0 + flash * 0.4) * lift;
     return lerp(col, g, GHOST_OPACITY);
 }
 
@@ -235,34 +237,56 @@ float3 drawZombies(float3 col, int2 cell, float2 grid, float T, int tick, float 
     [loop] for (int k = 0; k < ZOMBIES; k++)
     {
         float fk = (float)k;
-        float f  = loopFreq(1.0 / (ZOMBIE_TRIP * lerp(0.8, 1.25, hash(fk * 2.9))));
-        float d  = frac(T * f + hash(fk * 6.1));                    // 0 on the horizon, 1 at the front
+        // how this one walks: straight at you, at 45 degrees, or side on across the field
+        float kindRoll = hash(fk * 1.7);
+        int view = kindRoll < ZOMBIE_FRONT ? 0 : (kindRoll < ZOMBIE_FRONT + ZOMBIE_DIAG ? 1 : 2);
+        int arms = hash(fk * 2.3) < ZOMBIE_ARMS_OUT ? 0 : 1;
+        bool goLeft = hash(fk * 7.0) > 0.5;
+        // the stride: every zombie sways its own way, some barely, some wildly, some dragging a leg
+        float stepRate = ZOMBIE_LURCH * TAU * 0.5 * lerp(0.55, 1.5, hash(fk * 5.5));
+        float w  = T * loopRate(stepRate) + fk * 2.0;
+        float limp = hash(fk * 3.3) > 0.5 ? 0.6 * sin(2.0 * w + fk) : 0.0;
+        float swing = (sin(w) + limp) / (1.0 + abs(limp) * 0.5);
+        float d, x;
+        if (view < 2)
+        {
+            float f = loopFreq(1.0 / (ZOMBIE_TRIP * lerp(0.8, 1.25, hash(fk * 2.9))));
+            d = frac(T * f + hash(fk * 6.1));                       // 0 on the horizon, 1 at the front
+            float p0 = d * d;
+            float drift = view == 1 ? (goLeft ? -ZOMBIE_DRIFT : ZOMBIE_DRIFT) * (p0 - 0.5) : 0.0;
+            x = grid.x * (0.5 + (hash(fk * 4.3) - 0.5) * (0.45 + 1.1 * p0) + drift);
+        }
+        else
+        {
+            // side on: it keeps its distance and crosses at the pace its feet set, so they never slide
+            d = lerp(0.25, 0.75, hash(fk * 6.1));
+            float scS = lerp(ZOMBIE_FAR, ZOMBIE_NEAR, d * d);
+            float f = loopFreq(ZOMBIE_STRIDE * scS * loopRate(stepRate) / TAU / (grid.x * 1.3));
+            float u = frac(T * f + hash(fk * 4.3));
+            x = grid.x * lerp(-0.15, 1.15, goLeft ? 1.0 - u : u);
+        }
         float p  = d * d;                                           // perspective: slow far away, quick up close
         if (p < best) continue;
         float sc = lerp(ZOMBIE_FAR, ZOMBIE_NEAR, p);
         float feet = horizonY + 1.0 + (grid.y + ZH * ZOMBIE_NEAR * 0.6 - horizonY) * p;
-        // a mindless lurch: the body swings to one side and leans into it, then to the other
-        // every zombie sways its own way: some barely, some wildly, some dragging a leg (a lopsided lurch)
-        float w  = T * loopRate(ZOMBIE_LURCH * TAU * 0.5 * lerp(0.55, 1.5, hash(fk * 5.5))) + fk * 2.0;
-        float limp = hash(fk * 3.3) > 0.5 ? 0.6 * sin(2.0 * w + fk) : 0.0;
-        float swing = (sin(w) + limp) / (1.0 + abs(limp) * 0.5);
-        float lean = swing * ZOMBIE_LEAN * lerp(0.3, 1.9, hash(fk * 8.2));
-        float x  = grid.x * (0.5 + (hash(fk * 4.3) - 0.5) * (0.45 + 1.1 * p)) + swing * ZOMBIE_SWAY * lerp(0.2, 2.2, hash(fk * 9.4)) * sc;
-        float bob = abs(cos(w)) * 1.2 * sc;
-        float2 at = float2(x - ZW * sc * 0.5, feet - ZH * sc + bob);
+        // a mindless lurch: the body swings to one side and leans into it (side on, it rocks to and fro)
+        float lean = swing * ZOMBIE_LEAN * lerp(0.3, 1.9, hash(fk * 8.2)) * (view == 2 ? 0.4 : 1.0);
+        x += swing * ZOMBIE_SWAY * lerp(0.2, 2.2, hash(fk * 9.4)) * sc * (view == 2 ? 0.2 : 1.0);
+        float2 at = float2(x - ZW * sc * 0.5, feet - ZH * sc);
         float2 l = float2(float(cell.x) - at.x - lean * (feet - float(cell.y)), float(cell.y) - at.y) / sc;
         if (l.x < 0 || l.y < 0 || l.x >= ZW || l.y >= ZH) continue;
         int2 s = int2(l);
-        if (hash(fk * 7.0) > 0.5) s.x = ZW - 1 - s.x;
-        int frame = pmod(tick / 5 + k * 3, 4);
-        float4 t = texel(frame * ZW + s.x, Z_Y + (k & 1) * ZH + s.y);
+        if (goLeft) s.x = ZW - 1 - s.x;                             // the drawings walk to the right
+        int frame = pmod((int)floor(w / TAU * ZOMBIE_FRAMES), ZOMBIE_FRAMES);
+        int row = Z_Y + ((view * 2 + arms) * 2 + (k & 1)) * ZH;
+        float4 t = texel(frame * ZW + s.x, row + s.y);
         if (t.w == 0) continue;
         best = p;
         feetOut = feet;
-        float3 c = SILHOUETTE + t.rgb * flash * 1.1;
-        int2 sr = int2(clamp(s.x + (hash(fk * 7.0) > 0.5 ? -1 : 1), 0, ZW - 1), s.y);
-        if (texel(frame * ZW + sr.x, Z_Y + (k & 1) * ZH + sr.y).w == 0 || s.y == 0 ||
-            texel(frame * ZW + s.x, Z_Y + (k & 1) * ZH + max(s.y - 1, 0)).w == 0)
+        float3 c = SILHOUETTE + t.rgb * (ZOMBIE_AMBIENT + flash * 1.1);
+        int2 sr = int2(clamp(s.x + (goLeft ? -1 : 1), 0, ZW - 1), s.y);
+        if (texel(frame * ZW + sr.x, row + sr.y).w == 0 || s.y == 0 ||
+            texel(frame * ZW + s.x, row + max(s.y - 1, 0)).w == 0)
             c += RIM_COLOUR;
         z = lerp(c, FOG_COLOUR * (1.0 + flash * 2.5), (1.0 - d) * ZOMBIE_HAZE);
     }
@@ -282,20 +306,69 @@ float windowFlicker(float T)
     return 0.85 + 0.15 * sin(T * loopRate(2.3)) * sin(T * loopRate(0.7) + 1.0);
 }
 
+// the potion brewing inside: drifting slowly from one colour to the next, bubbling as it goes
+float3 brewColour(float T)
+{
+    float f = loopFreq(1.0 / BREW_CHANGE);
+    float p = T * f;
+    int i = pmod((int)floor(p), 4);
+    float3 c = lerp(BREW_COLOURS[i], BREW_COLOURS[(i + 1) % 4], smoothstep(0.6, 1.0, frac(p)));
+    float bubble = 0.85 + 0.15 * noise1(T * 6.0) * noise1(T * 2.3 + 4.0);
+    return c * bubble * windowFlicker(T);
+}
+
+// a bang in the hut at time t: rgb its colour, a how bright it is now. `smoke` instead asks how much
+// of the chimney smoke leaving at t still carries a bang's colour.
+float4 burstAt(float t, bool smoke)
+{
+    float f = loopFreq(1.0 / BURST_GAP);
+    float gap = 1.0 / f;
+    float4 r = 0;
+    [loop] for (int j = 0; j < 2; j++)
+    {
+        float slot = floor(t * f) - j;
+        float id = loopIndex(slot, f);
+        if (hash(id * 1.37 + 0.5) > BURST_CHANCE) continue;
+        float a = t - (slot * gap + hash(id * 2.11) * gap * 0.5);   // seconds since it went off
+        if (a < 0.0) continue;
+        float3 c = hash(id * 3.7) < 0.5 ? BURST_PURPLE : BURST_PINK;
+        float e;
+        if (smoke)
+            e = a < BURST_SMOKE ? 1.0 - a / BURST_SMOKE : 0.0;
+        else
+        {
+            // three quick pops, each a sharp flash that dies away, the middle one strongest
+            float p1 = 0.10 + 0.08 * hash(id * 5.3), p2 = 0.30 + 0.25 * hash(id * 6.1);
+            e = exp(-a * 14.0) * 0.8;
+            if (a > p1) e = max(e, exp(-(a - p1) * 10.0));
+            if (a > p2) e = max(e, exp(-(a - p2) * 12.0) * 0.7);
+            e *= 0.75 + 0.25 * step(0.5, frac(a * 23.0));          // a crackle in it
+        }
+        if (e > r.a) r = float4(c, e);
+    }
+    return r;
+}
+
 float3 drawHut(float3 col, int2 cell, float2 grid, float T, float flash, float fog, float horizonY, float zFeet, float dth)
 {
     float2 at; float sc, base;
     hutPlace(grid, horizonY, at, sc, base);
-    // the window's green light spilling onto the ground in front
+    float3 brew = brewColour(T);
+    float4 bang = burstAt(T, false);
+    float3 light = brew + bang.rgb * bang.a * BURST_GLOW;
+    // the window's light spilling onto the ground in front
     float2 win = at + float2(45.0, 71.0) * sc;
     float l = saturate(1.0 - length((float2(cell) - float2(win.x, base)) / (float2(40.0, 9.0) * sc)));
-    if (cell.y > base - 2.0 * sc) col += WINDOW_COLOUR * steps(l * l, 4.0, dth) * 0.12 * windowFlicker(T);
+    if (cell.y > base - 2.0 * sc) col += light * steps(l * l, 4.0, dth) * 0.12;
+    // a bang throws its light all round the hut, on the ground, the hills and the sky
+    float lb = saturate(1.0 - length(float2(cell) - win) / (BURST_REACH * sc));
+    col += bang.rgb * steps(lb * lb * bang.a, 5.0, dth) * 0.35;
     if (zFeet > base) return col;                                 // a zombie in front of the hut
     float4 t = sprite(cell, at, sc, HUT_X, 0, HUTW, HUTH, false);
     if (t.w == 0) return col;
     if (t.r > 0.9 && abs(t.b - 9.0 / 255.0) < 0.5 / 255.0)
-        return WINDOW_COLOUR * t.g * windowFlicker(T) * 1.4;
-    float3 h = t.rgb * (HUT_DARK + flash * 0.9);
+        return light * t.g * 1.4;
+    float3 h = t.rgb * (HUT_DARK + flash * 0.9) + bang.rgb * bang.a * lb * 0.5;
     return lerp(h, FOG_COLOUR * (1.0 + flash * 2.5), fog * 0.5);
 }
 
@@ -308,16 +381,20 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float2 c = float2(cell) + 0.5;
     // a column of smoke that widens as it rises and bends to the left in the wind, filled with
     // drifting lumps (noise scrolling upwards), thinning out towards the top
-    float h = (top.y - c.y) / (80.0 * sc);              // 0 at the chimney, 1 where it is gone
+    float h = (top.y - c.y) / (SMOKE_HEIGHT * sc);      // 0 at the chimney, 1 where it is gone
     if (h < -0.05 || h > 1.0) return col;
+    // the smoke here left the chimney this long ago (the lumps climb 32 * SMOKE_RISE hut pixels a second);
+    // smoke that left just after a bang carries the bang's colour, and billows out a little more
+    float4 tint = burstAt(T - h * SMOKE_HEIGHT / (32.0 * SMOKE_RISE), true);
     float mid = top.x - h * h * h * 70.0 * sc;
-    float halfw = (2.5 + h * 10.0) * sc;
+    float halfw = (2.5 + h * 10.0) * sc * (1.0 + 0.4 * tint.a);
     float across = abs(c.x - mid) / halfw;
     if (across > 1.3) return col;
     float lumps = noise2(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * loopRate(SMOKE_RISE * TAU) / TAU * 8.0));
-    float dens = (1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9;
+    float dens = (1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3;
     if (dens < 0.15 || dth > dens * 1.6) return col;
-    return lerp(col, SMOKE_COLOUR * (1.0 + flash * 2.0) * (1.0 - h * 0.4), 0.85);
+    float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, saturate(tint.a * 1.5));
+    return lerp(col, smoke * (1.0 + flash * 2.0) * (1.0 - h * 0.4), 0.85);
 }
 
 float3 drawPorchPumpkins(float3 col, int2 cell, float2 grid, float T, int tick, float flash, float horizonY, float dth)
@@ -365,30 +442,32 @@ float3 drawHangers(float3 col, int2 cell, float2 grid, float T, int tick, float 
     return col;
 }
 
-// a spider walking about on the inside of the glass: walk a stretch, stop, turn, walk again
+// a spider scuttling about on the inside of the glass. Its path is a few slow waves added together,
+// so it always curves gently into each new direction instead of stopping to spin round; it speeds up
+// and slows down as it goes, and wanders past the edges now and then, so spiders come and go.
 float3 drawCrawlers(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
 {
     [loop] for (int k = 0; k < CRAWLERS; k++)
     {
         float fk = (float)k;
-        float f  = loopFreq(1.0 / (CRAWL_STEP * lerp(0.85, 1.25, hash(fk * 1.1))));
-        float span = T * f + hash(fk * 2.2);
-        float m  = floor(span);
-        float a  = frac(span);
-        float m0 = loopIndex(m, f), m1 = loopIndex(m + 1.0, f), m2 = loopIndex(m + 2.0, f);
-        // waypoints scattered over the window and a little past its edges, so spiders come and go
-        float2 w0 = float2(hash(m0 * 1.3 + fk * 7.0), hash(m0 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float2 w1 = float2(hash(m1 * 1.3 + fk * 7.0), hash(m1 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float2 w2 = float2(hash(m2 * 1.3 + fk * 7.0), hash(m2 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float walk = 0.55;
-        float2 pos = lerp(w0, w1, smoothstep(0.0, 1.0, saturate(a / walk))) * grid;
-        float2 d0 = normalize((w1 - w0) * grid + 1e-4);
-        float2 d1 = normalize((w2 - w1) * grid + 1e-4);
-        // turn towards the next stretch at the end of the rest
-        float turn = smoothstep(0.80, 1.0, a);
-        float2 dir = normalize(lerp(d0, d1, turn) + 1e-4);
-        bool moving = a < walk || turn > 0.0;
-        int frame = moving ? pmod(tick + k, 4) : 0;
+        // its own clock runs faster and slower (it never runs backwards: the wobble is gentler than 1)
+        float wv = loopRate(0.36);
+        float t  = T + 2.0 * sin(T * wv + fk * 2.0);                  // 2 s * 0.36 < 1, so it only ever slows
+        float dt = 1.0 + 2.0 * wv * cos(T * wv + fk * 2.0);
+        float2 pos = 0.5, vel = 0;
+        [unroll] for (int i = 0; i < 3; i++)
+        {
+            float fi = (float)i;
+            float2 rate = CRAWL_SPEED * float2(1.0 + 0.9 * fi + 0.3 * hash(fk * 3.1 + fi), 0.8 + 1.1 * fi + 0.3 * hash(fk * 4.7 + fi));
+            rate = float2(loopRate(rate.x), loopRate(rate.y));
+            float2 ph = float2(hash(fk * 5.9 + fi), hash(fk * 6.7 + fi)) * TAU;
+            float2 amp = CRAWL_ROAM * float2(0.55, 0.45) / (1.0 + fi * 0.8);
+            pos += amp * sin(rate * t + ph);
+            vel += amp * rate * cos(rate * t + ph) * dt;
+        }
+        pos *= grid;
+        float2 dir = normalize(vel * grid + 1e-4);
+        int frame = pmod(tick * 2 + k, 4);                         // quick little legs
         float4 s = spriteTurned(cell, pos, -dir, float2(20.0, 22.0), CRAWL_SCALE, frame * SW, S_Y, SW, SH);
         // lit from behind by the scene, so mostly dark; a flash turns it into a black shape
         if (s.w > 0) col = s.rgb * (0.85 - flash * 0.75);

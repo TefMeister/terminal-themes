@@ -50,16 +50,23 @@ of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joi
 
 **New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
 drifting clouds and witches on brooms flying across far away, two rows of hills with dead trees and
-gravestones, a witch's hut on the left with a green-lit window, a smoking chimney and pumpkins on its
-porch, a foggy field with zombies each swaying its own way as they shuffle slowly towards you,
-candle-lit jack-o'-lanterns among the graves, two groups of big ones in the bottom corners turned to
-look towards the middle (the biggest half hidden past the right edge), and spiders right on the glass, some dangling from the top on
-a thread and some crawling about on the inside of the screen, so you see their undersides.
+gravestones, and a witch's hut on the left with pumpkins on its porch. Potions are brewing inside:
+the window glow drifts from green to purple, pink and teal, and now and then something goes bang in
+quick purple or pink flashes that light up the hut, while the chimney smoke takes the same colour.
 
-Every 45 seconds the top of the sky slowly darkens, then a big old-school sheet ghost rises in the
-middle, its sheet streaming in the wind. Lightning keeps striking for as long as it stays: three big
-strikes first, then more at uneven times, with small bolts flashing far off. Each flash swells,
-flickers and fades. In the dark the zombies are black shapes; the lightning shows what they are.
+Zombies cross a foggy field, each with its own walk: some come straight at you, some at an angle,
+some shuffle sideways across the field, some with arms held out in front and some with arms
+hanging and swinging, legs stepping, each swaying its own way. Candle-lit jack-o'-lanterns stand
+among the graves, with two groups of big ones in the bottom corners turned towards the middle. Small
+spiders scurry about on the inside of the glass, so you see their undersides, curving smoothly as
+they turn, and others drop from the top on a thread.
+
+Every 45 seconds the top of the sky slowly darkens and an old-school sheet ghost appears, its sheet
+streaming in the wind. Each visit is in one of ten places, near or far, big or small, drifting left
+or right: from behind the hut, behind the trees with the gravestones in front of it, or close
+enough to fill half the window. Lightning keeps striking for as long as it stays: three big strikes
+first, then more at uneven times, with small bolts flashing far off. Each flash swells, flickers and
+fades, and shows the zombies in full.
 
 ![The Halloween style, moving](preview/halloween.gif)
 
@@ -121,7 +128,8 @@ the matching numbers at the top of `aquarium.hlsl` too.
 
 How often the ghost comes, how long it stays, how many zombies there are and the rest sit at the top
 of `halloween.hlsl`. The pumpkins, zombies, witch, spiders, trees and gravestones are drawn in code by
-`styles/halloween/halloween-sprites.py` (needs Pillow), which rewrites `halloween-sheet.png`. The
+`styles/halloween/halloween-sprites.py` (needs Pillow; the walking zombies are posed as little 3D
+figures in `halloween-zombies.py`, next to it), which rewrites `halloween-sheet.png`. The
 ghost, the lightning and the smoke are drawn by the shader itself. The shader is split in two:
 `halloween-cast.hlsli` must stay next to `halloween.hlsl` if you copy them somewhere else.
 
