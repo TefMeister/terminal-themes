@@ -1,11 +1,13 @@
-// Aquarium: a calm pixel-art fish tank drawn behind the text.
+// Ocean: a calm pixel-art view under the sea, drawn behind the text.
 // Everything is drawn on a coarse grid of "cells" (chunky pixels) and only changes FPS times a
-// second, for a retro terminal look. Water fills the window up to a surface near the top and
-// fades to black at the left and right edges. Back to front: a sea floor rolling away into the
-// distance with faint far plants, far fish, the back row of plants, middle fish and the crab,
-// rocks and the front row of plants, near fish, then bubbles. So fish swim behind plants too.
-// Fish, plants and rocks are pixel sprites from aquarium-sheet.png (drawn by
-// aquarium-sprites.py; the sheet layout constants below must match that script).
+// second, for a retro terminal look. Above a still, barely swaying surface near the top is daylight
+// sky with a few slow clouds; below it the water fades to black at the edges. Back to front: a sea
+// floor rolling away into the distance with faint far plants, far fish (and the whale, when it passes
+// far off), the back row of plants, middle fish (and the whale, when it passes nearer), the crab,
+// rocks and the front row of plants, near fish, then bubbles. A school of small silver fish wanders
+// through at its own depth, turning almost together. So fish swim behind plants too.
+// Fish, plants, rocks, the whale and the school fish are pixel sprites from ocean-sheet.png (drawn by
+// ocean-sprites.py and ocean-creatures.py; the sheet layout constants below must match).
 // The colour scheme's background must be pure black: anything not black counts as text.
 Texture2D shaderTexture;
 Texture2D image;
@@ -17,7 +19,7 @@ static const float  CELL_PIXELS    = 3.0;    // screen pixels per chunky pixel
 static const float  FPS            = 5.0;    // how often the picture changes per second
 static const float  SCENE_BRIGHT   = 0.48;   // overall tank brightness (text is not affected)
 
-// --- sprite sheet layout (matches aquarium-sprites.py) ---
+// --- sprite sheet layout (matches ocean-sprites.py) ---
 static const int    SHEET_W = 832, SHEET_H = 832;
 static const int    FW = 32, FH = 24;        // fish cell
 static const int    PW = 40, PH = 64;        // plant / rock cell
@@ -27,15 +29,26 @@ static const int    ROCK_FIRST     = 10;     // rows 10..12 rocks
 static const int    ROCK_KINDS     = 3;
 static const int    FISH_SPECIES   = 7;      // fish rows; the next row is the crab
 static const int    FISH_X         = PW * PLANT_FRAMES;  // fish columns: 0-1 side, 2-3 head-on, 4-5 from behind
+static const int    WHALE_W = 128, WHALE_H = 40, WHALE_Y = 192, WHALE_FRAMES = 4;  // under the fish, one frame per row
+static const int    SCHOOL_W = 16, SCHOOL_H = 8, SCHOOL_Y = 352;                   // school fish: 2 frames side by side
 
-// --- water, air, sea floor ---
-static const float3 AIR_COLOUR     = float3(0.015, 0.025, 0.035);
-static const float3 SURFACE_COLOUR = float3(0.30, 0.55, 0.65);
+// --- daylight sky above the water ---
+static const float  SKY_SHARE      = 0.15;   // share of the height above the water line
+static const float3 SKY_TOP        = float3(0.42, 0.68, 0.96);
+static const float3 SKY_LOW        = float3(0.86, 0.94, 1.00);   // paler near the sea
+static const float  SKY_BANDS      = 6.0;
+static const float3 CLOUD_COLOUR   = float3(1.00, 1.00, 1.00);
+static const float  CLOUD_DRIFT    = 0.012;  // how fast the clouds drift (cloud widths per second)
+static const float  SURFACE_SWAY   = 0.25;   // how quickly the still surface rises and falls a cell here and there
+static const float3 SURFACE_COLOUR = float3(0.78, 0.92, 0.98);
+static const float3 GLINT_COLOUR   = float3(1.00, 1.00, 0.95);   // sunlight glinting on the surface
+
+// --- water, sea floor ---
 static const float3 WATER_TOP      = float3(0.700, 0.920, 1.000);
 static const float3 WATER_DEEP     = float3(0.350, 0.650, 0.880);
 static const float  WATER_BANDS    = 7.0;    // colour steps from top to bottom (retro banding)
-static const float  SURFACE_ROW    = 8.0;    // cells from the top to the water line
 static const float3 RAY_COLOUR     = float3(0.05, 0.10, 0.11);
+static const float  RAY_LEVEL      = 0.82;   // higher = fewer light rays from the surface
 static const float3 SAND_A         = float3(0.200, 0.160, 0.100);
 static const float3 SAND_B         = float3(0.165, 0.130, 0.080);
 static const float3 SAND_C         = float3(0.240, 0.200, 0.130);
@@ -79,6 +92,21 @@ static const float  FISH_NEAR_BRIGHT = 1.20;
 static const float  FISH_FAR_SAT     = 0.70;  // 1 = the sprite's own colours, below 1 = greyer
 static const float  FISH_NEAR_SAT    = 1.30;  // above 1 = more vivid
 
+// --- the whale: now and then it swims across, far off or a little nearer, never close ---
+static const float  WHALE_CYCLE    = 75.0;   // seconds from one crossing to the next
+static const float  WHALE_TRIP     = 0.70;   // share of that spent crossing
+static const float  WHALE_FAR      = 0.85;   // size far off (it passes behind the middle plants)...
+static const float  WHALE_MID      = 1.55;   // ...and nearer (behind the back row of plants)
+static const float  WHALE_FAR_HAZE = 0.60;
+static const float  WHALE_MID_HAZE = 0.35;
+
+// --- the school: small silver fish moving as one, each a little out of step ---
+static const int    SCHOOL_COUNT   = 22;
+static const float  SCHOOL_SPEED   = 0.05;   // how quickly the school wanders (radians of its path per second)
+static const float  SCHOOL_SPREAD  = 16.0;   // how far the fish spread from the middle, in cells (at full size)
+static const float  SCHOOL_LAG     = 0.9;    // the most seconds a fish trails the others in a turn
+static const float  SCHOOL_HAZE    = 0.45;   // how much the school melts into the water when far
+
 // --- crab ---
 static const float  CRAB_WANDER    = 0.22;   // share of the width it walks back and forth over
 static const float  CRAB_SPEED     = 0.05;
@@ -108,6 +136,14 @@ float hash(float n) { return frac(sin(n * 127.1 + 11.7) * 43758.5453); }
 float hash2(float2 p) { return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
 // modulo that never goes negative (Time, and so tick, can be negative)
 int pmod(int a, int n) { int m = a % n; return m < 0 ? m + n : m; }
+
+float noise2(float2 p)
+{
+    float2 i = floor(p), f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash2(i), b = hash2(i + float2(1, 0)), c = hash2(i + float2(0, 1)), d = hash2(i + float2(1, 1));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
 
 float dither(int2 c) { return (BAYER[(c.y & 3) * 4 + (c.x & 3)] + 0.5) / 16.0; }
 
@@ -341,6 +377,80 @@ float3 drawBubbles(float3 col, int2 cell, float2 grid, float top, float bottom, 
     return col;
 }
 
+// the whale, when this crossing is at `layer` (0 far, 1 nearer); otherwise col unchanged
+float3 drawWhale(float3 col, int2 cell, float2 grid, float top, float horizon, float T, int tick, float3 water, int layer)
+{
+    float f = loopFreq(1.0 / WHALE_CYCLE);
+    float p = T * f + 0.3;
+    float n = floor(p);
+    if (LOOP_SECONDS > 0.0) n = 0.0;
+    float u = frac(p) / WHALE_TRIP;
+    if (u > 1.0) return col;
+    int route = hash(n * 3.7) < 0.5 ? 0 : 1;
+    if (route != layer) return col;
+    bool left = hash(n * 5.1) < 0.5;
+    float sc = route == 0 ? WHALE_FAR : WHALE_MID;
+    float w = WHALE_W * sc, h = WHALE_H * sc;
+    float x = lerp(-0.25 * grid.x - w * 0.5, 1.25 * grid.x + w * 0.5, left ? 1.0 - u : u);
+    float yMid = route == 0 ? lerp(top, horizon, 0.62) : lerp(top, horizon, 0.40 + 0.2 * hash(n * 2.2));
+    float y = yMid + sin(T * loopRate(0.3)) * 1.5 * sc;
+    float2 l = (float2(cell) - float2(x - w * 0.5, y - h * 0.5)) / sc;
+    if (l.x < 0 || l.y < 0 || l.x >= WHALE_W || l.y >= WHALE_H) return col;
+    int sx = left ? WHALE_W - 1 - (int)l.x : (int)l.x;
+    int frame = pmod(tick / 2, WHALE_FRAMES);
+    float4 t = texel(FISH_X + sx, WHALE_Y + frame * WHALE_H + (int)l.y);
+    if (t.w == 0) return col;
+    return lerp(t.rgb, water, route == 0 ? WHALE_FAR_HAZE : WHALE_MID_HAZE);
+}
+
+// the school's middle at time t: (x share of the width, height share of the water, depth 0..1)
+float3 schoolCentre(float t)
+{
+    float w = loopRate(SCHOOL_SPEED);
+    return float3(0.5 + 0.30 * sin(t * w * 1.0 + 1.0) + 0.10 * sin(t * w * 2.7 + 4.0),
+                  0.45 + 0.20 * sin(t * w * 1.6 + 2.0) + 0.06 * sin(t * w * 3.9),
+                  0.50 + 0.25 * sin(t * w * 0.7 + 3.0));
+}
+
+// the small fish of the school nearest the viewer at this cell. Each follows the school's path a
+// little behind the others (its own lag), so a turn ripples through the school instead of the whole
+// school flipping at once; each also keeps its own place in the group and wobbles a little.
+// Returns the colour (w = 1 if a fish is here) and, in `layer`, which depth slot it belongs in.
+float4 drawSchool(int2 cell, float2 grid, float top, float horizon, float T, int tick, float3 water, out int layer)
+{
+    float3 mid = schoolCentre(T);
+    layer = mid.z < 0.3 ? 0 : (mid.z < 0.6 ? 1 : (mid.z < 0.85 ? 2 : 3));
+    float sc = lerp(0.55, 1.15, mid.z);
+    float2 midXY = float2(mid.x * grid.x, lerp(top + 4.0, horizon, mid.y));
+    float2 c = float2(cell) + 0.5;
+    if (length((c - midXY) / float2(2.2, 1.0)) > (SCHOOL_SPREAD + 30.0) * sc) return 0;
+    float4 r = 0;
+    [loop] for (int i = 0; i < SCHOOL_COUNT; i++)
+    {
+        float fi = (float)i;
+        float lag = hash(fi * 3.3) * SCHOOL_LAG;
+        float3 a = schoolCentre(T - lag), b = schoolCentre(T - lag - 0.4);
+        float2 at = float2(a.x * grid.x, lerp(top + 4.0, horizon, a.y));
+        float2 prev = float2(b.x * grid.x, lerp(top + 4.0, horizon, b.y));
+        float ang = hash(fi * 7.1) * TAU, rad = sqrt(hash(fi * 5.3));
+        at += float2(cos(ang) * 2.2, sin(ang)) * rad * SCHOOL_SPREAD * sc
+            + float2(sin(T * loopRate(1.1) + fi), cos(T * loopRate(0.9) + fi * 1.7)) * 1.2;
+        float2 v = at - prev;
+        float sp = length(v) + 1e-4;
+        float squeeze = max(0.3, abs(v.x) / sp);               // narrow while heading up or down: turning
+        float sx = sc * squeeze;
+        float2 l = float2((c.x - at.x) / sx + SCHOOL_W * 0.5, (c.y - at.y) / sc + SCHOOL_H * 0.5);
+        if (l.x < 0 || l.y < 0 || l.x >= SCHOOL_W || l.y >= SCHOOL_H) continue;
+        int px = v.x < 0.0 ? SCHOOL_W - 1 - (int)l.x : (int)l.x;
+        int frame = pmod(tick + i, 2);
+        float4 t = texel(FISH_X + frame * SCHOOL_W + px, SCHOOL_Y + (int)l.y);
+        if (t.w == 0) continue;
+        float3 fc = saturate(t.rgb * lerp(FISH_FAR_BRIGHT, FISH_NEAR_BRIGHT, mid.z));
+        r = float4(lerp(fc, water, (1.0 - mid.z) * SCHOOL_HAZE), 1.0);
+    }
+    return r;
+}
+
 // the background fades to black at every edge of the window; the letters do not
 static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
 float screenFade(float2 tex)
@@ -365,16 +475,31 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     image.GetDimensions(iw, ih);
     bool sprites = iw == SHEET_W && ih == SHEET_H;
 
-    // water line: flat, with the odd one-cell ripple drifting along it
-    float wave   = sin(cx * 0.21 + T * loopRate(1.7)) + sin(cx * 0.09 - T * loopRate(1.0));
-    float top    = SURFACE_ROW + (wave > 1.3 ? -1.0 : (wave < -1.3 ? 1.0 : 0.0));
+    // water line: still, rising or dipping a cell here and there, slowly
+    float surfaceRow = floor(grid.y * SKY_SHARE);
+    float wave   = sin(cx * 0.13 + T * loopRate(SURFACE_SWAY)) + sin(cx * 0.05 - T * loopRate(SURFACE_SWAY * 0.6));
+    float top    = surfaceRow + (wave > 1.6 ? -1.0 : (wave < -1.6 ? 1.0 : 0.0));
     float sand   = grid.y - SAND_ROWS;
     float sandTop = sand - (hash(floor(cx / 3.0)) > 0.65 ? 1.0 : 0.0);
-    float horizon = sand - (sand - SURFACE_ROW) * HORIZON;
+    float horizon = sand - (sand - surfaceRow) * HORIZON;
 
     float3 col;
-    if (cell.y < top)       col = AIR_COLOUR;
-    else if (cell.y == top) col = SURFACE_COLOUR;
+    if (cell.y < top)
+    {
+        // daylight: a banded blue sky, paler near the sea, with a few soft clouds drifting by
+        float v = cell.y / max(top, 1.0);
+        col = lerp(SKY_TOP, SKY_LOW, floor(v * SKY_BANDS + dth) / SKY_BANDS);
+        float2 cp = float2(cx * 0.012 + T * loopRate(CLOUD_DRIFT * TAU) / TAU, cell.y * 0.06);
+        float cl = noise2(cp) * 0.7 + noise2(cp * 2.5 + 3.0) * 0.3;
+        cl *= saturate(1.0 - abs(v - 0.4) / 0.45);
+        if (cl > 0.55) col = lerp(col, CLOUD_COLOUR, floor(saturate((cl - 0.55) / 0.15) * 3.0 + dth) / 3.0 * 0.8);
+    }
+    else if (cell.y == top)
+    {
+        // the surface line, with sunlight glinting on it here and there
+        col = SURFACE_COLOUR;
+        if (hash2(float2(floor(cx / 2.0), floor(T * 0.8))) > 0.93) col = GLINT_COLOUR;
+    }
     else
     {
         float depth = saturate((cell.y - top) / max(sand - top, 1.0));
@@ -382,8 +507,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         col = lerp(WATER_TOP, WATER_DEEP, band);
 
         float r   = cx + cell.y * 0.45;
-        float ray = sin(r * 0.05 + T * loopRate(0.10)) * sin(r * 0.11 - T * loopRate(0.07));
-        if (ray + dth * 0.35 > 0.6) col += RAY_COLOUR * (1.0 - depth);
+        float ray = sin(r * 0.035 + T * loopRate(0.10)) * sin(r * 0.11 - T * loopRate(0.07));
+        if (ray + dth * 0.35 > RAY_LEVEL) col += RAY_COLOUR * (1.0 - depth);
         float3 water = col;
 
         // the far sea floor: hazy at the ridge, turning into sand as it comes closer
@@ -406,16 +531,24 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         {
             float4 fish[4];
             gatherFish(cell, grid, top, sand, horizon, T, tick, water, fish);
+            int schoolLayer;
+            float4 school = drawSchool(cell, grid, top, horizon, T, tick, water, schoolLayer);
             col = drawRow(col, cell, grid, -1.0, horizon, tick, PLANTS_FAR, 50.0, 0, PLANT_KINDS, FAR_SCALE, FAR_HAZE, water);
+            col = drawWhale(col, cell, grid, top, horizon, T, tick, water, 0);
             col = over(col, fish[0]);
+            if (schoolLayer == 0) col = over(col, school);
             col = drawRow(col, cell, grid, -2.0, horizon, tick, PLANTS_MID, 90.0, 0, PLANT_KINDS, MID_SCALE, MID_HAZE, water);
+            col = drawWhale(col, cell, grid, top, horizon, T, tick, water, 1);
             col = over(col, fish[1]);
+            if (schoolLayer == 1) col = over(col, school);
             col = drawRow(col, cell, grid, sand + 2.0, horizon, tick, PLANTS_BACK, 0.0, 0, PLANT_KINDS, 1.0, BACK_HAZE, water);
             col = over(col, fish[2]);
+            if (schoolLayer == 2) col = over(col, school);
             col = drawCrab(col, cell, grid, sand, T, tick);
             col = drawRow(col, cell, grid, sand + 3.0, horizon, tick, ROCKS, 70.0, ROCK_FIRST, ROCK_KINDS, 1.0, 0.1, water);
             col = drawRow(col, cell, grid, sand + 3.0, horizon, tick, PLANTS_FRONT, 31.0, 0, PLANT_KINDS, 1.0, 0.0, water);
             col = over(col, fish[3]);
+            if (schoolLayer == 3) col = over(col, school);
         }
         col = drawBubbles(col, cell, grid, top, sand, T);
     }

@@ -1,17 +1,25 @@
-"""Draws the aquarium's pixel-art sprite sheet (aquarium-sheet.png) for aquarium.hlsl.
+"""Draws the ocean's pixel-art sprite sheet (ocean-sheet.png) for ocean.hlsl.
 
-Layout (must match the constants in aquarium.hlsl):
+Layout (must match the constants in ocean.hlsl):
   plants: PLANT_TYPES rows x PLANT_FRAMES columns of PW x PH cells, starting at x=0
   fish:   FISH_ROWS rows x 6 columns of FW x FH cells, starting at x = PW * PLANT_FRAMES
           columns 0-1 side view (tail frames), 2-3 head-on, 4-5 from behind (tail swinging)
+  whale:  WHALE_FRAMES rows of WHALE_W x WHALE_H at x = FISH_X, under the fish (ocean-creatures.py)
+  school: SCHOOL_FRAMES small fish of SCHOOL_W x SCHOOL_H side by side, under the whale
 Magenta (255, 0, 255) means "nothing here".
 Everything faces right; the shader mirrors sprites for fish swimming left.
-Run:  python aquarium-sprites.py
+Run:  python ocean-sprites.py
 """
 import math
 import os
+import importlib.util
 import random
 from PIL import Image
+
+_spec = importlib.util.spec_from_file_location(
+    "ocean_creatures", os.path.join(os.path.dirname(os.path.abspath(__file__)), "ocean-creatures.py"))
+CREATURES = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CREATURES)
 
 KEY = (255, 0, 255)
 FW, FH = 32, 24            # fish cell
@@ -24,6 +32,9 @@ FISH_X = PW * PLANT_FRAMES
 FISH_COLS = 6
 SHEET_W = FISH_X + FW * FISH_COLS
 SHEET_H = max(PH * PLANT_TYPES, FH * FISH_ROWS)
+# under the fish: the whale (WHALE_FRAMES rows), then the school fish (frames side by side)
+WHALE_Y = FH * FISH_ROWS
+SCHOOL_Y = WHALE_Y + CREATURES.WHALE_H * CREATURES.WHALE_FRAMES
 
 
 def clamp(v):
@@ -601,7 +612,14 @@ def main():
             draw_fish_end(sp, f, True).blit(img, FISH_X + (4 + f) * FW, row * FH)
     for f in range(2):
         draw_crab(f).blit(img, FISH_X + f * FW, len(SPECIES) * FH)
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "aquarium-sheet.png")
+    for f in range(CREATURES.WHALE_FRAMES):
+        for (x, y), col in CREATURES.draw_whale(f).items():
+            img.putpixel((FISH_X + x, WHALE_Y + f * CREATURES.WHALE_H + y), col)
+    for f in range(CREATURES.SCHOOL_FRAMES):
+        for (x, y), col in CREATURES.draw_school_fish(f).items():
+            img.putpixel((FISH_X + f * CREATURES.SCHOOL_W + x, SCHOOL_Y + y), col)
+    print(f"WHALE_Y={WHALE_Y} SCHOOL_Y={SCHOOL_Y}")
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ocean-sheet.png")
     img.save(out)
     print("wrote", out, img.size)
 

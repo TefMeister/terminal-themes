@@ -32,19 +32,23 @@ at full size on the terminal's own Campbell scheme, so the lines are visible.
 
 ![The sharp scanlines style, moving](preview/sharp-scanlines.gif)
 
-### [`aquarium`](styles/aquarium/)
+### [`ocean`](styles/ocean/)
 
-**New, still being tuned.** A calm pixel-art fish tank behind the text, moving at about 5 frames a
-second: light blue water that fades to black at the sides, a sea floor rolling into the distance,
-swaying plants, rocks, rising bubbles, a crab, and two each of seven kinds of fish. The fish swim
-sideways, turn, swim away (tail swinging) and come back towards you head-on, passing behind and in
-front of the plants. Far-off fish are dim and grey; the closer one swims, the brighter and more
-colourful it gets.
+**New, still being tuned** (it was the aquarium until 2026-10-01). A calm pixel-art view under the
+sea behind the text, moving at about 5 frames a second. At the top, daylight: blue sky with a few
+slow clouds over a still surface that only now and then rises or dips a cell, with sunlight glinting
+on it. Below, light blue water fades to black at the sides, over a sea floor rolling into the
+distance, with swaying plants, rocks, rising bubbles, a crab and a few soft light rays. Two each of
+seven kinds of fish swim sideways, turn, swim away and come back towards you head-on, passing behind
+and in front of the plants; far fish are dim and grey, near ones bright. A school of small silver
+fish wanders through, turning almost as one, each fish a moment behind its neighbours. Now and then
+a humpback whale glides across, far off or a little nearer, never close.
 
-![The aquarium style, moving](preview/aquarium.gif)
+![The ocean style, moving](preview/ocean.gif)
 
-In the terminal the tank never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top
-of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joins up without a seam.
+The clip above still shows the earlier aquarium; a new one is on its way. In the terminal the ocean
+never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top of `ocean.hlsl`) that
+makes every movement repeat on the dot, so the clip joins up without a seam.
 
 ### [`halloween`](styles/halloween/)
 
@@ -107,18 +111,18 @@ the theme is a still picture.
 and pick the RobCo theme with `/theme`. It draws your own messages on a hidden marker colour, which the
 shader finds and turns a yellow-green, so you can tell your lines from Claude's at a glance.
 
-## Install (aquarium)
+## Install (ocean)
 
 1. Download or clone this repo somewhere that will stay put.
 2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
-3. From [`profile-snippet.json`](styles/aquarium/profile-snippet.json), paste the `profile` into
+3. From [`profile-snippet.json`](styles/ocean/profile-snippet.json), paste the `profile` into
    `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
    repo, **written with forward slashes**. The font, Cascadia Code, comes with Windows Terminal.
-4. Open a new tab with the **Aquarium Claude** profile.
+4. Open a new tab with the **Ocean Claude** profile.
 
-The fish, plants and rocks are drawn in code by `styles/aquarium/aquarium-sprites.py` (needs
-Pillow), which rewrites `aquarium-sheet.png` next to it. If you change the sheet's layout, change
-the matching numbers at the top of `aquarium.hlsl` too.
+The fish, plants and rocks are drawn in code by `styles/ocean/ocean-sprites.py` (needs Pillow; the
+whale and the school fish are in `ocean-creatures.py`, next to it), which rewrites `ocean-sheet.png`.
+If you change the sheet's layout, change the matching numbers at the top of `ocean.hlsl` too.
 
 ## Install (halloween)
 
