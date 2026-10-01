@@ -68,6 +68,11 @@ static const int    STRIKES        = 12;     // most strikes in one visit; they 
 static const float  STRIKE_GAP_MIN = 1.0;    // seconds between strikes after the first three...
 static const float  STRIKE_GAP_MAX = 4.5;    // ...picked at random in this range, so never regular
 static const int    DISTANT_EACH   = 2;      // small far-off bolts that follow each strike
+static const float3 STORM_PURPLE   = float3(0.74, 0.62, 1.00);   // storm clouds as a flash lights them...
+static const float3 STORM_BLUE     = float3(0.52, 0.66, 1.00);   // ...drifting between these two colours
+static const float  STORM_SPEED    = 0.55;   // how fast they race across (cloud widths per second, roughly)
+static const float  STORM_GLOW     = 1.3;    // how strongly a flash lights them
+static const float  STORM_WASH     = 0.35;   // plain light spread over the whole sky in a flash
 static const float  DIM_LEAD       = 6.0;    // seconds the sky darkens before the ghost comes
 static const float  DIM_RELEASE    = 4.0;    // seconds it takes to clear after the ghost has gone
 static const float  DIM_AMOUNT     = 0.65;   // how dark the top of the picture gets
@@ -488,7 +493,14 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         if (md < mr) col = lerp(col, MOON_COLOUR * 0.55, 0.35);
         col += FLASH_SKY * flash * 0.45;
     }
-    col = lerp(col, FLASH_SKY, flash * 0.55 * (1.0 - v * 0.3));
+    col = lerp(col, FLASH_SKY, flash * STORM_WASH * (1.0 - v * 0.3));
+    // storm clouds racing across: unseen in the dark, lit light purple and blue by each flash, and
+    // fading out towards the horizon so they melt into the distance
+    float2 sp = c * float2(0.007, 0.028) + float2(Tf * loopRate(STORM_SPEED * TAU) / TAU, Tf * loopRate(STORM_SPEED * 0.15 * TAU) / TAU);
+    float storm = noise2(sp) * 0.6 + noise2(sp * 2.3 + 7.0) * 0.4;
+    float stormLit = smoothstep(0.40, 0.78, storm) * (1.0 - smoothstep(0.30, 0.92, v)) * (flash + bl.y * 2.0);
+    float3 stormCol = lerp(STORM_PURPLE, STORM_BLUE, noise2(sp * 0.6 + 3.0));
+    col = lerp(col, stormCol, steps(saturate(stormLit * STORM_GLOW), 6.0, dth));
     col += FLASH_SKY * steps(bl.y, 5.0, dth) * step(c.y, horizonY);   // far-off lightning glowing in the sky
     float3 sky = col;
     col = lerp(col, BOLT_COLOUR, bl.x);
