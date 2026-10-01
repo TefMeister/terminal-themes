@@ -97,12 +97,12 @@ float2 picture(float4 pos)
     return float2(l, fade);
 }
 
-// the background fades to black at every edge of the window; the letters do not
-static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
+// the background fades to black in a thin strip at the left and right edges of the window, where the
+// picture is cut off; the top and bottom are drawn right to the edge. The letters do not fade.
+static const float  SIDE_FADE     = 0.04;   // share of the width over which each side fades to black
 float screenFade(float2 tex)
 {
-    float2 e = min(tex, 1.0 - tex) / float2(SCREEN_FADE * Resolution.y / Resolution.x, SCREEN_FADE);
-    return smoothstep(0.0, 1.0, saturate(min(e.x, e.y)));
+    return smoothstep(0.0, 1.0, saturate(min(tex.x, 1.0 - tex.x) / SIDE_FADE));
 }
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
