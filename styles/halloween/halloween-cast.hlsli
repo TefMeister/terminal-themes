@@ -159,10 +159,11 @@ float3 pumpkinHalo(float3 col, int2 cell, float2 centre, float2 reach, int k, fl
 }
 
 // one jack-o'-lantern standing on `foot` (bottom middle); k picks its candle's flicker
-float3 drawPumpkin(float3 col, int2 cell, float2 foot, float sc, int kind, int k, float T, int tick, float flash, bool mirror)
+// `row` is the sheet row the drawing starts on and `size` its cell; the frames run along the row
+float3 drawPumpkinFrom(float3 col, int2 cell, float2 foot, float sc, int row, int2 size, int k, float T, int tick, float flash, bool mirror)
 {
     int frame = pmod(tick / 2 + k * 3, 4);
-    float4 t = sprite(cell, foot - float2(PKW * sc * 0.5, PKH * sc), sc, frame * PKW, PK_Y + kind * PKH, PKW, PKH, mirror);
+    float4 t = sprite(cell, foot - float2(size.x * sc * 0.5, size.y * sc), sc, frame * size.x, row, size.x, size.y, mirror);
     if (t.w == 0) return col;
     float fl = candle(k, T);
     bool code = t.r > 0.9;
@@ -172,16 +173,31 @@ float3 drawPumpkin(float3 col, int2 cell, float2 foot, float sc, int kind, int k
         return lerp(CANDLE_DEEP, CANDLE_HOT, saturate(t.g * fl * 1.05 - 0.25)) * (0.7 + 0.5 * fl) * CANDLE_GLOW;
     }
     if (code && abs(t.b - 8.0 / 255.0) < 0.5 / 255.0)        // wax and cut flesh, lit by the flame
-        return float3(1.0, 0.86 * t.g / max(t.r, 0.01), 0.62) * t.r * (0.7 + 0.5 * fl) * 1.4;
+        return float3(1.0, t.g / max(t.r, 0.01), 0.45) * t.r * (0.7 + 0.5 * fl) * 1.4;
     return t.rgb * (PUMPKIN_BODY * (0.85 + 0.3 * fl) + flash * 0.9);
+}
+
+float3 drawPumpkin(float3 col, int2 cell, float2 foot, float sc, int kind, int k, float T, int tick, float flash, bool mirror)
+{
+    return drawPumpkinFrom(col, cell, foot, sc, PK_Y + kind * PKH, int2(PKW, PKH), k, T, tick, flash, mirror);
+}
+
+// where foreground pumpkin k stands (bottom middle) and its scale
+void pumpkinPlace(int k, float2 grid, out float2 foot, out float sc)
+{
+    float x = PK_INSET[k] * grid.y;
+    foot = float2(PK_SIDE[k] > 0 ? grid.x - x : x, grid.y + PK_SINK[k] * grid.y);
+    sc = PK_HEIGHT[k] * grid.y / BPH;
 }
 
 float3 pumpkinPools(float3 col, int2 cell, float2 grid, float T, float dth)
 {
     [loop] for (int k = 0; k < PUMPKINS; k++)
     {
-        float2 base = float2(grid.x * PK_X[k], grid.y + PK_BOTTOM[k] - 2.0);
-        col = pumpkinHalo(col, cell, base, POOL_SIZE * PK_SCALE[k] * float2(1.0, 0.38), k, T, dth);
+        float2 foot; float sc;
+        pumpkinPlace(k, grid, foot, sc);
+        float h = PK_HEIGHT[k] * grid.y;
+        col = pumpkinHalo(col, cell, float2(foot.x, min(foot.y, grid.y) - 2.0), POOL_SIZE * h * float2(1.0, 0.32), k, T, dth);
     }
     return col;
 }
@@ -201,7 +217,11 @@ float3 drawHillPumpkins(float3 col, int2 cell, float2 grid, float T, int tick, f
 float3 drawPumpkins(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
 {
     [loop] for (int k = 0; k < PUMPKINS; k++)
-        col = drawPumpkin(col, cell, float2(grid.x * PK_X[k], grid.y + PK_BOTTOM[k]), PK_SCALE[k], PK_KIND[k], k, T, tick, flash, (k & 1) == 1);
+    {
+        float2 foot; float sc;
+        pumpkinPlace(k, grid, foot, sc);
+        col = drawPumpkinFrom(col, cell, foot, sc, BIG_Y + PK_ROW[k] * BPH, int2(BPW, BPH), k, T, tick, flash, PK_SIDE[k] < 0);
+    }
     return col;
 }
 
@@ -222,9 +242,12 @@ float3 drawZombies(float3 col, int2 cell, float2 grid, float T, int tick, float 
         float sc = lerp(ZOMBIE_FAR, ZOMBIE_NEAR, p);
         float feet = horizonY + 1.0 + (grid.y + ZH * ZOMBIE_NEAR * 0.6 - horizonY) * p;
         // a mindless lurch: the body swings to one side and leans into it, then to the other
-        float w  = T * loopRate(ZOMBIE_LURCH * TAU * 0.5 * lerp(0.8, 1.2, hash(fk * 5.5))) + fk * 2.0;
-        float lean = sin(w) * ZOMBIE_LEAN * lerp(0.7, 1.3, hash(fk * 8.2));
-        float x  = grid.x * (0.5 + (hash(fk * 4.3) - 0.5) * (0.45 + 1.1 * p)) + sin(w) * ZOMBIE_SWAY * sc;
+        // every zombie sways its own way: some barely, some wildly, some dragging a leg (a lopsided lurch)
+        float w  = T * loopRate(ZOMBIE_LURCH * TAU * 0.5 * lerp(0.55, 1.5, hash(fk * 5.5))) + fk * 2.0;
+        float limp = hash(fk * 3.3) > 0.5 ? 0.6 * sin(2.0 * w + fk) : 0.0;
+        float swing = (sin(w) + limp) / (1.0 + abs(limp) * 0.5);
+        float lean = swing * ZOMBIE_LEAN * lerp(0.3, 1.9, hash(fk * 8.2));
+        float x  = grid.x * (0.5 + (hash(fk * 4.3) - 0.5) * (0.45 + 1.1 * p)) + swing * ZOMBIE_SWAY * lerp(0.2, 2.2, hash(fk * 9.4)) * sc;
         float bob = abs(cos(w)) * 1.2 * sc;
         float2 at = float2(x - ZW * sc * 0.5, feet - ZH * sc + bob);
         float2 l = float2(float(cell.x) - at.x - lean * (feet - float(cell.y)), float(cell.y) - at.y) / sc;

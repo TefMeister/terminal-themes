@@ -3,6 +3,7 @@
 Layout (must match the constants in halloween.hlsl; the script prints them):
   pumpkins      3 kinds x 4 frames,   PKW x PKH, one row per kind (the frames are the candle flame)
   hut           1,                    HUTW x HUTH, to the right of the pumpkins
+  big pumpkins  3 x 4 frames,         BPW x BPH, at the bottom: turned to look left, drawn twice as fine
   zombies       2 kinds x 4 frames,   ZW x ZH, one row per kind (front view, walking towards you)
   witch         4 frames,             WW x WH (a silhouette mask, facing right)
   spider        4 frames,             SW x SH (seen from underneath, crawling on the glass, facing up)
@@ -40,8 +41,10 @@ S_Y = W_Y + WH
 H_Y = S_Y + SH
 T_Y = H_Y + HH
 G_Y = T_Y + TH
-SHEET_W = HUT_X + HUTW
-SHEET_H = G_Y + GH
+BPW, BPH = PKW * 2, PKH * 2
+BIG_Y = G_Y + GH
+SHEET_W = max(HUT_X + HUTW, 4 * BPW)
+SHEET_H = BIG_Y + 3 * BPH
 
 
 def clamp(v):
@@ -167,43 +170,68 @@ def pumpkin_face(kind, cx, cy, ry):
     return face, ey
 
 
-def draw_pumpkin(kind, frame):
-    """A round, ribbed jack-o'-lantern lit by a candle inside. frame = the flame's shape."""
-    c = Cell(PKW, PKH)
+def draw_pumpkin(kind, frame, yaw_deg=0.0, res=1):
+    """A round, ribbed jack-o'-lantern lit by a candle inside. frame = the flame's shape.
+    yaw_deg turns the face to the left (the shader mirrors it for pumpkins that look right).
+    res draws it at that many pixels per pixel, for the big pumpkins near the screen."""
+    W, H = PKW * res, PKH * res
+    c = Cell(W, H)
+    yaw = math.radians(yaw_deg)
     cx = PKW / 2
     ry = [15.5, 17.5, 15.0][kind]
     rx = [22.0, 19.0, 23.0][kind]
     cy = PKH - ry - 1.5
     ribs = [6, 5, 7][kind]
     lx, ly, lz = 0.45, -0.55, 0.70                       # moonlight from the upper right, towards us
-    for y in range(PKH):
-        for x in range(PKW):
-            u = (x + 0.5 - cx) / rx
-            v = (y + 0.5 - cy) / ry
+    face, ey = pumpkin_face(kind, cx, cy, ry)
+    my = cy + ry * 0.38
+
+    def face_x(px, py):
+        """Where on the flat face design this point of the round, turned pumpkin lies (None = round the back)."""
+        u = (px - cx) / rx
+        v = (py - cy) / ry
+        rr = math.sqrt(max(1e-4, 1.0 - v * v))
+        lon = math.asin(max(-1.0, min(1.0, u / rr))) + yaw
+        if math.cos(lon) < 0.12:
+            return None
+        return cx + rr * math.sin(lon) * rx
+
+    holes = set()
+    for y in range(H):
+        for x in range(W):
+            px, py = (x + 0.5) / res, (y + 0.5) / res
+            u = (px - cx) / rx
+            v = (py - cy) / ry
             d = u * u + v * v * (1.0 + 0.25 * max(0.0, -v) * (1.0 - abs(u)))
             if d > 1.0:
                 continue
             nz = math.sqrt(max(0.0, 1.0 - d))
-            # each rib is its own bulge: tilt the surface across it
-            a = math.atan2(u, max(nz, 0.05))
-            rib_phase = a * ribs / 1.0
+            # each rib is its own bulge: tilt the surface across it (the ribs turn with the pumpkin)
+            a = math.atan2(u, max(nz, 0.05)) + yaw
+            rib_phase = a * ribs
             bulge = math.cos(rib_phase)
             tilt = -math.sin(rib_phase) * 0.45
             nx, ny = u + tilt, v
             n = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
             diff = max(0.0, (nx * lx + ny * ly + nz * lz) / n)
-            groove = bulge < -0.75
             k = 0.18 + 0.82 * diff
             k *= 0.55 + 0.45 * (bulge * 0.5 + 0.5)
             k *= 0.45 + 0.55 * math.sqrt(nz)             # dark towards the outline: it reads as round
             if v > 0.55:
                 k *= 1.0 - (v - 0.55) * 0.9              # its own shadow underneath
             col = mix(ORANGE_DARK, ORANGE, k * 1.15)
-            if groove:
-                col = shade(col, 0.6)
+            if bulge < -0.75:
+                col = shade(col, 0.6)                     # the grooves between ribs
             if diff > 0.82 and bulge > 0.6 and v < 0.1:
                 col = mix(col, ORANGE_LIGHT, (diff - 0.82) * 4.0)   # shine on the rib tops
             c.put(x, y, col)
+            fx = face_x(px, py)
+            if fx is None:
+                continue
+            if kind == 2 and my + 1 <= py < my + 3 and any(abs(fx - (cx + tx) - 0.5) < 0.5 for tx in (-8, -3, 3, 8)):
+                continue                                  # teeth left standing in the grin
+            if any(inside(pts, fx, py) for pts in face):
+                holes.add((x, y))
     c.outline(lambda col: shade(col, 0.6))
     # stem, lit on its right
     sx = cx - 1 + kind
@@ -211,63 +239,58 @@ def draw_pumpkin(kind, frame):
     for i in range(7):
         bend = (i / 6.0) ** 2 * (3 if kind != 1 else -3)
         for w in range(3 if i < 4 else 2):
-            c.put(sx + bend + w, top + 1 - i, mix((44, 48, 18), STEM, w / 2))
-
-    face, ey = pumpkin_face(kind, cx, cy, ry)
-    holes = set()
-    for pts in face:
-        for y in range(PKH):
-            for x in range(PKW):
-                if c.get(x, y) is not None and inside(pts, x + 0.5, y + 0.5):
-                    holes.add((x, y))
+            for qy in range(res):
+                for qx in range(res):
+                    c.put((sx + bend + w) * res + qx, (top + 1 - i) * res + qy, mix((44, 48, 18), STEM, w / 2))
 
     # the candle stands on the bottom inside; we see it, and its flame, only through the holes
     wick_y = cy + ry * 0.28
     base_y = cy + ry * 0.80
-    fx = cx + FLAME_SWAY[frame]
+    flx = cx + FLAME_SWAY[frame]
     flame_h = [6.5, 7.5, 6.0, 7.0][frame]
     for (x, y) in holes:
-        px, py = x + 0.5, y + 0.5
+        px, py = (x + 0.5) / res, (y + 0.5) / res
         # the inside of the shell, lit brightest close to the flame
-        dist = math.hypot((px - fx) / 1.6, py - (wick_y - 2))
+        dist = math.hypot((px - flx) / 1.6, py - (wick_y - 2))
         g = 205 - min(dist, 20) * 6.5
         near_edge = sum((x + dx, y + dy) not in holes for dx in (-1, 0, 1) for dy in (-1, 0, 1))
-        g -= near_edge * 6
+        g -= near_edge * 6 / res
         col = glow(g)
         if abs(px - cx) <= 2.2 and wick_y <= py <= base_y:
             col = WAX if px - cx < 1.0 else (210, 190, 8)           # wax, shaded on one side
         t = (wick_y - py) / flame_h                                   # 0 at the wick, 1 at the tip
         if 0.0 <= t <= 1.0:
             w = (1.6 if t < 0.45 else 1.6 * (1.0 - (t - 0.45) / 0.55)) + 0.3
-            if abs(px - (fx + t * FLAME_SWAY[frame] * 0.8)) <= w:
+            if abs(px - (flx + t * FLAME_SWAY[frame] * 0.8)) <= w:
                 col = glow(255) if t > 0.15 else glow(205)
         c.put(x, y, col)
     # the cut flesh: a pale rim on the hole edges facing away from the middle, and along the bottom
     for (x, y) in holes:
-        side = 1 if x + 0.5 > cx else -1
+        side = 1 if (x + 0.5) / res > cx else -1
         for dx, dy in ((side, 0), (0, 1)):
-            if (x + dx, y + dy) not in holes:
+            if (x + dx * res, y + dy * res) not in holes:
                 col = c.get(x, y)
                 if col and col[2] == 7:
                     c.put(x, y, FLESH)
                 break
     # light leaking through the thin skin round the cuts
+    reach = 2 * res
     for (x, y), col in list(c.px.items()):
         if (x, y) in holes or col[2] in (7, 8):
             continue
-        near = min((abs(x - hx) + abs(y - hy) for hx, hy in holes if abs(x - hx) < 4 and abs(y - hy) < 4), default=9)
-        if near <= 2:
-            c.px[(x, y)] = mix(col, SPILL, (3 - near) * 0.12)
-    if kind == 2:
-        my = cy + ry * 0.38
-        for tx in (-8, -3, 3, 8):
-            for ty in range(2):
-                c.put(cx + tx, my + 1 + ty, mix(ORANGE, ORANGE_DARK, 0.3))
+        near = min((abs(x - hx) + abs(y - hy) for hx, hy in holes
+                    if abs(x - hx) <= reach and abs(y - hy) <= reach), default=99)
+        if near <= reach:
+            c.px[(x, y)] = mix(col, SPILL, (reach + 1 - near) / res * 0.12)
     # no plain skin pixel may look like one of the shader's light codes
     for p, col in list(c.px.items()):
         if col[2] not in (7, 8) and col[0] > 229 and 6 <= col[2] <= 10:
             c.px[p] = (col[0], col[1], 12)
     return c
+
+
+# the turned pumpkins at the bottom of the screen, drawn twice as fine: (kind, how far the face turns)
+BIG_PUMPKINS = [(0, 50.0), (1, 45.0), (2, 55.0)]
 
 
 # ---------------------------------------------------------------- the witch's hut
@@ -701,6 +724,9 @@ def main():
         for f in range(4):
             draw_pumpkin(k, f).blit(img, f * PKW, PK_Y + k * PKH)
     draw_hut().blit(img, HUT_X, 0)
+    for row, (kind, yaw) in enumerate(BIG_PUMPKINS):
+        for f in range(4):
+            draw_pumpkin(kind, f, yaw, 2).blit(img, f * BPW, BIG_Y + row * BPH)
     for k in range(2):
         for f in range(4):
             draw_zombie(k, f).blit(img, f * ZW, Z_Y + k * ZH)
@@ -715,7 +741,7 @@ def main():
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-sheet.png")
     img.save(out)
     print("wrote", out, img.size)
-    print(f"PK_Y={PK_Y} HUT_X={HUT_X} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
+    print(f"BIG_Y={BIG_Y} SHEET={SHEET_W}x{SHEET_H} PK_Y={PK_Y} HUT_X={HUT_X} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
 
 
 if __name__ == "__main__":
