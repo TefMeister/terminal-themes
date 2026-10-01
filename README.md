@@ -50,11 +50,15 @@ of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joi
 
 **New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
 drifting clouds and witches on brooms flying across far away, two rows of hills with dead trees and
-gravestones, a foggy field, glowing evil-eyed pumpkins along the bottom, and spiders right on the
-glass, some dangling from the top on a thread and some crawling about on the inside of the screen,
-so you see their undersides. Every 45 seconds a big old-school sheet ghost rises in the middle, its
-sheet streaming in the wind, and three lightning strikes light up the night at uneven times. Each
-flash swells, flickers and fades, and only in that light do you see the zombies walking towards you.
+gravestones, a witch's hut on the left with a green-lit window, a smoking chimney and pumpkins on its
+porch, a foggy field with zombies shuffling mindlessly towards you, round candle-lit jack-o'-lanterns
+along the bottom and among the graves, and spiders right on the glass, some dangling from the top on
+a thread and some crawling about on the inside of the screen, so you see their undersides.
+
+Every 45 seconds the top of the sky slowly darkens, then a big old-school sheet ghost rises in the
+middle, its sheet streaming in the wind. Lightning keeps striking for as long as it stays: three big
+strikes first, then more at uneven times, with small bolts flashing far off. Each flash swells,
+flickers and fades. In the dark the zombies are black shapes; the lightning shows what they are.
 
 ![The Halloween style, moving](preview/halloween.gif)
 
@@ -117,13 +121,17 @@ the matching numbers at the top of `aquarium.hlsl` too.
 How often the ghost comes, how long it stays, how many zombies there are and the rest sit at the top
 of `halloween.hlsl`. The pumpkins, zombies, witch, spiders, trees and gravestones are drawn in code by
 `styles/halloween/halloween-sprites.py` (needs Pillow), which rewrites `halloween-sheet.png`. The
-ghost and the lightning are drawn by the shader itself.
+ghost, the lightning and the smoke are drawn by the shader itself. The shader is split in two:
+`halloween-cast.hlsli` must stay next to `halloween.hlsl` if you copy them somewhere else.
 
 ## Tuning
 
 Every number worth changing sits at the top of each `.hlsl` file with a comment saying what it does:
 glow strength, how faint the picture is, how fast the light runs down, how dark the corners get.
 Save the file and Windows Terminal reloads it straight away.
+
+**Every style fades its picture to black at all four edges of the window** (`SCREEN_FADE`, or
+`EDGE_FADE` in the Halloween style). The letters do not fade. New styles do the same.
 
 ## Remaking the pictures
 

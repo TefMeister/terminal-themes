@@ -341,6 +341,14 @@ float3 drawBubbles(float3 col, int2 cell, float2 grid, float top, float bottom, 
     return col;
 }
 
+// the background fades to black at every edge of the window; the letters do not
+static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
+float screenFade(float2 tex)
+{
+    float2 e = min(tex, 1.0 - tex) / float2(SCREEN_FADE * Resolution.y / Resolution.x, SCREEN_FADE);
+    return smoothstep(0.0, 1.0, saturate(min(e.x, e.y)));
+}
+
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 {
     float  s     = max(Scale, 1.0);
@@ -414,7 +422,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     // fade to black at the left and right, in dithered steps so it stays pixel-art
     float u    = (cx + 0.5) / grid.x;
-    float fade = smoothstep(0.0, EDGE_FADE, u) * smoothstep(0.0, EDGE_FADE, 1.0 - u);
+    float fade = smoothstep(0.0, EDGE_FADE, u) * smoothstep(0.0, EDGE_FADE, 1.0 - u) * screenFade(tex);
     col *= saturate(floor(fade * 6.0 + dth) / 6.0) * SCENE_BRIGHT;
 
     // letters on top, crisp; the tank fades out underneath them so they stay readable

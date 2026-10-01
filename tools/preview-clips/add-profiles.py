@@ -60,6 +60,9 @@ BLOCK = BEGIN + "".join([
 def write_loop_shaders():
     for name, (shader, seconds, extra) in LOOPS.items():
         src = open(STYLES + shader, encoding="utf-8").read()
+        # the copy lives in another folder, so paste in any file the shader includes
+        folder = os.path.dirname(STYLES + shader)
+        src = re.sub(r'#include "([^"]+)"', lambda m: open(f"{folder}/{m.group(1)}", encoding="utf-8").read(), src)
         for key, value in {"LOOP_SECONDS": seconds, **extra}.items():
             src, n = re.subn(rf"({key}\s*=\s*)[\d.]+;", rf"\g<1>{float(value)};", src, count=1)
             assert n == 1, f"{key} not found in {shader}"
