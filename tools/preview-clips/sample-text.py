@@ -15,7 +15,7 @@ END_MARGIN = 1.0       # the screen is cleared this long before the loop ends, s
 LINES = [
     ("> can you make the fish further away look dimmer, and the close ones a bit brighter?", 0.02),
     ("", 0),
-    ("● Sure. The tank is drawn by a small shader, so each fish can fade by how far away it is.", 0.015),
+    ("● Sure. The ocean is drawn by a small shader, so each fish can fade by how far away it is.", 0.015),
     ("", 0),
     ("● Read styles/ocean/ocean.hlsl", 0.01),
     ("", 0),

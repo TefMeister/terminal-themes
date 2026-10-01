@@ -20,7 +20,7 @@ BACKUP = SETTINGS + ".bak-preview-clips"
 LOOPS = {
     "ocean": ("ocean/ocean.hlsl", 32, {}),
     # one ghost visit and some quiet night after it
-    "halloween": ("halloween/halloween.hlsl", 30, {"GHOST_STAY": 12}),
+    "halloween": ("halloween/halloween.hlsl", 32, {"GHOST_STAY": 12}),
 }
 TEXT = HERE + "/sample-text.py"
 BEGIN = "            // BEGIN preview-clip profiles (temporary)\n"

@@ -255,7 +255,7 @@ static const float3 THREAD_COLOUR  = float3(0.40, 0.40, 0.46);
 // --- looping, for recording a clip ---
 // 0 = off: the picture runs freely, as it should in the terminal. Set it to a number of seconds and
 // everything repeats exactly that often, so a recording of that length loops without a seam.
-// Use a multiple of 6 that fits one ghost visit (for example 48).
+// Use a length that fits one ghost visit and a whole number of every animation's frames: 32 works.
 static const float  LOOP_SECONDS   = 0.0;
 static const float  TAU            = 6.28318530718;
 
@@ -278,6 +278,26 @@ float noise2(float2 p)
     float a = hash2(i), b = hash2(i + float2(1, 0)), c = hash2(i + float2(0, 1)), d = hash2(i + float2(1, 1));
     return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
 }
+// the same, repeating every `period` units (a whole number). In loop mode anything that drifts across
+// a noise pattern uses this, with the period set to how far it drifts in one loop, so the clip joins
+// up exactly; outside loop mode the period is huge and nothing ever repeats.
+float2 wrapCell(float2 i, float2 period) { return i - period * floor(i / period); }
+float noise2w(float2 p, float2 period)
+{
+    float2 i = floor(p), f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash2(wrapCell(i, period)), b = hash2(wrapCell(i + float2(1, 0), period));
+    float c = hash2(wrapCell(i + float2(0, 1), period)), d = hash2(wrapCell(i + float2(1, 1), period));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+float noise1w(float x, float period)
+{
+    float i = floor(x), f = frac(x);
+    return lerp(hash(i - period * floor(i / period)), hash(i + 1.0 - period * floor((i + 1.0) / period)),
+                f * f * (3.0 - 2.0 * f)) * 2.0 - 1.0;
+}
+// how far something moving at `rate` units a second gets in one loop: the period for noise2w/noise1w
+float loopSpan(float rate) { return LOOP_SECONDS > 0.0 ? max(1.0, round(rate * LOOP_SECONDS)) : 1e5; }
 float steps(float v, float n, float d) { return saturate(floor(v * n + d) / n); }
 
 // in loop mode, snap a rate (radians per second) or a frequency (trips per second) to the nearest
@@ -524,8 +544,10 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         col = m;
     }
     // drifting clouds, lit at the rim near the moon
-    float2 cp = c * float2(0.010, 0.045) + float2(T * loopRate(0.05) / TAU * 6.0, 0.0);
-    float cl = noise2(cp) * 0.65 + noise2(cp * 2.7 + 5.0) * 0.35;
+    float cloudRate = loopRate(0.05) / TAU * 6.0;
+    float2 cp = c * float2(0.010, 0.045) + float2(T * cloudRate, 0.0);
+    float2 cPer = float2(loopSpan(cloudRate), 1e5);
+    float cl = noise2w(cp, cPer) * 0.65 + noise2w(cp * 3.0 + 5.0, cPer * 3.0) * 0.35;
     float cloud = cl * saturate(1.0 - abs(v - 0.30) / 0.24);
     if (cloud > 0.55)
     {
@@ -538,10 +560,12 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     col = lerp(col, FLASH_SKY, flash * STORM_WASH * (1.0 - v * 0.3));
     // storm clouds racing across: unseen in the dark, lit light purple and blue by each flash, and
     // fading out towards the horizon so they melt into the distance
-    float2 sp = c * float2(0.007, 0.028) + float2(Tf * loopRate(STORM_SPEED * TAU) / TAU, Tf * loopRate(STORM_SPEED * 0.15 * TAU) / TAU);
-    float storm = noise2(sp) * 0.6 + noise2(sp * 2.3 + 7.0) * 0.4;
+    float2 sRate = float2(loopRate(STORM_SPEED * TAU), loopRate(STORM_SPEED * 0.15 * TAU)) / TAU;
+    float2 sp = c * float2(0.007, 0.028) + Tf * sRate;
+    float2 sPer = float2(loopSpan(sRate.x), loopSpan(sRate.y));
+    float storm = noise2w(sp, sPer) * 0.6 + noise2w(sp * 2.0 + 7.0, sPer * 2.0) * 0.4;
     float stormLit = smoothstep(0.40, 0.78, storm) * (1.0 - smoothstep(0.30, 0.92, v)) * (flash + bl.y * 2.0);
-    float3 stormCol = lerp(STORM_PURPLE, STORM_BLUE, noise2(sp * 0.6 + 3.0));
+    float3 stormCol = lerp(STORM_PURPLE, STORM_BLUE, noise2w(sp + 3.0, sPer));
     col = lerp(col, stormCol, steps(saturate(stormLit * STORM_GLOW), 6.0, dth));
     col += FLASH_SKY * steps(bl.y, 5.0, dth) * step(c.y, horizonY);   // far-off lightning glowing in the sky
     float3 sky = col;
