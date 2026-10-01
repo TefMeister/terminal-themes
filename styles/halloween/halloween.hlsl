@@ -295,10 +295,10 @@ float3 readText(float2 uv)
     float3 c = shaderTexture.Sample(samplerState, uv).rgb;
     if (isMarker(c)) c = float3(0, 0, 0);
     bool userRow = false;
-    for (int i = 0; i < ROW_SAMPLES; i++)
+    [loop] for (int i = 0; i < ROW_SAMPLES; i++)
     {
         float x = (i + 0.5) / ROW_SAMPLES;
-        if (isMarker(shaderTexture.Sample(samplerState, float2(x, uv.y)).rgb)) { userRow = true; break; }
+        if (isMarker(shaderTexture.SampleLevel(samplerState, float2(x, uv.y), 0).rgb)) { userRow = true; break; }
     }
     if (userRow) c = USER_COLOUR * ink(c);
     return c;
@@ -412,26 +412,24 @@ float2 bolts(float2 c, float t, float n, float s1, float2 grid, float horizonY, 
         if (st > s1 + GHOST_STAY) break;
         float seed = n * 17.0 + i * 5.3;
         float a = t - st;
-        if (a >= 0.0 && a < 0.32)
+        // j = -1 is the strike's own big bolt from the top of the sky; the rest are the small far-off
+        // ones that follow it at uneven delays
+        [loop] for (int j = -1; j < DISTANT_EACH; j++)
         {
-            float x0 = grid.x * (0.06 + 0.88 * hash(seed));
-            float bottom = horizonY - grid.y * 0.12;
-            float on = strikeLight(a) > 0.45 ? 1.0 : 0.55;
-            b = max(b, boltLine(c, x0, 0.0, bottom, seed, 16.0, 1.5) * on * min(1.0, strikeStrength(n, i) + 0.3));
-            glow = max(glow, saturate(1.0 - abs(c.x - x0) / 30.0) * 0.18 * strikeLight(a) * step(c.y, bottom));
-        }
-        [loop] for (int j = 0; j < DISTANT_EACH; j++)
-        {
-            float ds = seed * 1.7 + j * 11.0;
-            float da = a - (0.15 + hash(ds) * 2.2);              // they follow at uneven delays
-            if (da < 0.0 || da > 0.8) continue;
-            float e = strikeLight(da) * (0.4 + 0.4 * hash(ds + 4.0));
-            distant = max(distant, e);
-            float x0 = grid.x * hash(ds + 1.0);
-            float foot = horizonY - grid.y * (0.10 + 0.04 * hash(ds + 3.0));
-            float top = foot - grid.y * (0.10 + 0.14 * hash(ds + 2.0));
-            if (da < 0.25) b = max(b, boltLine(c, x0, top, foot, ds, 5.0, 0.55) * 0.55 * (e > 0.2 ? 1.0 : 0.5));
-            glow = max(glow, saturate(1.0 - length((c - float2(x0, foot)) / float2(55.0, 30.0))) * e * 0.35);
+            bool big = j < 0;
+            float ds = big ? seed : seed * 1.7 + j * 11.0;
+            float da = big ? a : a - (0.15 + hash(ds) * 2.2);
+            if (da < 0.0 || da > (big ? 0.32 : 0.8)) continue;
+            float e = strikeLight(da) * (big ? 1.0 : 0.4 + 0.4 * hash(ds + 4.0));
+            float x0 = grid.x * (big ? 0.06 + 0.88 * hash(seed) : hash(ds + 1.0));
+            float foot = horizonY - grid.y * (big ? 0.12 : 0.10 + 0.04 * hash(ds + 3.0));
+            float top = big ? 0.0 : foot - grid.y * (0.10 + 0.14 * hash(ds + 2.0));
+            float strength = big ? (e > 0.45 ? 1.0 : 0.55) * min(1.0, strikeStrength(n, i) + 0.3)
+                                 : 0.55 * (e > 0.2 ? 1.0 : 0.5);
+            if (!big) distant = max(distant, e);
+            if (big || da < 0.25) b = max(b, boltLine(c, x0, top, foot, ds, big ? 16.0 : 5.0, big ? 1.5 : 0.55) * strength);
+            glow = max(glow, big ? saturate(1.0 - abs(c.x - x0) / 30.0) * 0.18 * e * step(c.y, foot)
+                                 : saturate(1.0 - length((c - float2(x0, foot)) / float2(55.0, 30.0))) * e * 0.35);
         }
     }
     return float2(b, glow);
