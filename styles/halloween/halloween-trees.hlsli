@@ -12,12 +12,39 @@ void treePlace(int i, float2 grid, float horizonY, out float2 at, out float sc, 
 
 float treeBase(int i, float2 grid, float horizonY) { return horizonY + (grid.y - horizonY) * FT_DEPTH[i]; }
 
-// one big tree: a black shape with a moonlit edge in the dark; a lightning flash shows its bark.
-// Its few leaves keep a little of their colour even in the dark.
-float3 drawBigTree(float3 col, int2 cell, float2 grid, float horizonY, int i, float flash)
+// lantern j of big tree i: where its cord ends (the lantern's top), which way it hangs, and its flicker
+void lanternAt(int i, int j, float T, float2 at, float sc, out float2 pos, out float2 down, out float fl)
+{
+    float2 a = BT_ANCHOR[FT_KIND[i] * 4 + LANTERN_ANCHOR[FT_KIND[i] * 2 + j]];
+    if (FT_MIRROR[i] != 0) a.x = BTW - a.x;
+    float k = (float)(i * 2 + j);
+    float swing = LANTERN_SWING * sin(T * loopRate(0.9 + 0.35 * hash(k * 2.1)) + k * 1.7);
+    down = float2(sin(swing), cos(swing));
+    pos = at + a * sc + down * LANTERN_CORD * sc;
+    fl = candle(20 + i * 2 + j, T);
+}
+
+// the warm light both lanterns of tree i throw on this cell
+float3 lanternLight(float2 c, int i, float T, float2 at, float sc)
+{
+    float3 L = 0;
+    [loop] for (int j = 0; j < 2; j++)
+    {
+        float2 pos, down; float fl;
+        lanternAt(i, j, T, at, sc, pos, down, fl);
+        float l = saturate(1.0 - length(c - (pos + down * 3.5 * sc)) / (LANTERN_REACH * sc));
+        L += LANTERN_COLOUR * fl * l * l;
+    }
+    return L;
+}
+
+// one big tree: a black shape with a moonlit edge in the dark; a lightning flash shows its bark, and
+// the lanterns light it warmly close by. Its few leaves keep a little of their colour even in the dark.
+float3 drawBigTree(float3 col, int2 cell, float2 grid, float horizonY, int i, float flash, float T)
 {
     float2 at; float sc, base;
     treePlace(i, grid, horizonY, at, sc, base);
+    float3 L = lanternLight(float2(cell) + 0.5, i, T, at, sc);
     bool mirror = FT_MIRROR[i] != 0;
     int sx = FT_KIND[i] * BTW;
     float4 t = sprite(cell, at, sc, sx, BT_Y, BTW, BTH, mirror);
@@ -25,11 +52,39 @@ float3 drawBigTree(float3 col, int2 cell, float2 grid, float horizonY, int i, fl
     float haze = (1.0 - FT_DEPTH[i]) * TREE_HAZE;
     float3 fogLit = FOG_COLOUR * (1.0 + flash * 2.5);
     if (abs(t.b - 5.0 / 255.0) < 0.5 / 255.0)                     // a leaf
-        return lerp(t.rgb * (LEAF_AMBIENT + flash * 1.1), fogLit, haze);
-    float3 c = SILHOUETTE + t.rgb * flash * TREE_BARK;
+        return lerp(t.rgb * (LEAF_AMBIENT + flash * 1.1 + L * LANTERN_BARK), fogLit, haze);
+    float3 c = SILHOUETTE + t.rgb * (flash * TREE_BARK + L * LANTERN_BARK);
     // the moon catches the right-hand edge of every limb
     if (sprite(cell + int2(1, 0), at, sc, sx, BT_Y, BTW, BTH, mirror).w == 0) c += RIM_COLOUR;
     return lerp(c, fogLit, haze);
+}
+
+// the lanterns of tree i: a small metal cap and base, glowing glass between, on a short cord, with a
+// soft glow in the air round each
+float3 drawLanterns(float3 col, int2 cell, float2 grid, float T, int i, float horizonY, float dth)
+{
+    float2 at; float sc, base;
+    treePlace(i, grid, horizonY, at, sc, base);
+    float2 c = float2(cell) + 0.5;
+    [loop] for (int j = 0; j < 2; j++)
+    {
+        float2 pos, down; float fl;
+        lanternAt(i, j, T, at, sc, pos, down, fl);
+        float2 q = c - pos;
+        float2 right = float2(down.y, -down.x);
+        float lx = dot(q, right) / sc, ly = dot(q, down) / sc;      // lantern pixels: across, and down from its top
+        float halo = saturate(1.0 - length(q - down * 3.5 * sc) / (LANTERN_REACH * 0.55 * sc));
+        col += LANTERN_COLOUR * steps(halo * halo, 4.0, dth) * LANTERN_HALO * fl;
+        if (ly >= -LANTERN_CORD && ly < 0.0 && abs(lx) < 0.4) col = float3(0.06, 0.05, 0.04);           // the cord
+        else if (ly >= 0.0 && ly < 1.3 && abs(lx) < 1.7) col = float3(0.10, 0.08, 0.06) + LANTERN_COLOUR * 0.15 * fl;  // cap
+        else if (ly >= 1.3 && ly < 6.0 && abs(lx) < 2.3)
+        {
+            if (abs(lx) > 1.8 || abs(ly - 3.6) < 0.35) col = float3(0.12, 0.09, 0.06);    // the frame
+            else col = lerp(LANTERN_COLOUR, float3(1.0, 0.93, 0.70), saturate(1.2 - length(float2(lx, ly - 3.6)) * 0.5)) * (1.2 + 0.4 * fl);
+        }
+        else if (ly >= 6.0 && ly < 7.0 && abs(lx) < 1.7) col = float3(0.10, 0.08, 0.06) + LANTERN_COLOUR * 0.2 * fl; // base
+    }
+    return col;
 }
 
 // spiders letting themselves down on a thread from the big trees' branches: a quick drop with a
@@ -48,7 +103,10 @@ float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, fl
         float ph = frac(T * f + fk / HANGERS + 0.1);
         float n  = loopIndex(floor(T * f + fk / HANGERS + 0.1), f) + fk * 17.0;
         if (pmod((int)(hash(n * 1.3) * 2.99 + fk), FG_TREES) != tree) continue;
-        float2 anchor = BT_ANCHOR[FT_KIND[tree] * 4 + (int)(hash(n * 4.1) * 3.99)];
+        int ai = (int)(hash(n * 4.1) * 3.99);
+        float2 anchor = BT_ANCHOR[FT_KIND[tree] * 4 + ai];
+        if (ai == LANTERN_ANCHOR[FT_KIND[tree] * 2] || ai == LANTERN_ANCHOR[FT_KIND[tree] * 2 + 1])
+            anchor.x += 7.0;                                        // drop beside the lantern, not through it
         if (mirror) anchor.x = BTW - anchor.x;
         float2 top = at + anchor * sc;
         float t  = ph / f;
@@ -63,9 +121,10 @@ float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, fl
         float2 body = top + down * l;
         float2 pa = c - top;
         float h = saturate(dot(pa, down) / max(l, 1.0));
-        if (length(pa - down * h * l) < 0.55 && h < 1.0) col = lerp(col, THREAD_COLOUR * (1.0 + flash), 0.7);
+        float3 L = lanternLight(c, tree, T, at, sc);
+        if (length(pa - down * h * l) < 0.55 && h < 1.0) col = lerp(col, THREAD_COLOUR * (1.0 + flash + L * 2.0), 0.7);
         float4 s = spriteTurned(cell, body, down, float2(12.0, 1.0), sc * HANG_SCALE, (pmod(tick / 2 + k, 2)) * HW, H_Y, HW, HH);
-        if (s.w > 0) col = s.rgb * (0.9 - flash * 0.6);
+        if (s.w > 0) col = s.rgb * (0.9 - flash * 0.6 + L * LANTERN_SPIDER);   // lit up passing a lantern
     }
     return col;
 }

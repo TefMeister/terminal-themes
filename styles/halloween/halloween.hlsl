@@ -105,6 +105,15 @@ static const int    FT_MIRROR[3]   = { 0, 0, 1 };
 static const float  TREE_HAZE      = 0.35;   // further trees melt a little into the fog
 static const float  TREE_BARK      = 1.0;    // how much bark a lightning flash shows
 static const float  LEAF_AMBIENT   = 0.35;   // the few leaves keep a little colour in the dark
+// lanterns hanging from the lower branches, swinging a little, lighting the trunk and passing spiders
+static const int    LANTERN_ANCHOR[4] = { 1, 2, 0, 2 };   // which branch points (BT_ANCHOR) carry one: 2 per drawing
+static const float  LANTERN_CORD   = 7.0;    // cord length, in tree pixels
+static const float  LANTERN_SWING  = 0.14;   // how far they swing (radians)
+static const float3 LANTERN_COLOUR = float3(1.00, 0.70, 0.30);
+static const float  LANTERN_REACH  = 38.0;   // how far the light reaches, in tree pixels
+static const float  LANTERN_BARK   = 1.6;    // how strongly it lights the bark
+static const float  LANTERN_HALO   = 0.20;   // the glow in the air round it
+static const float  LANTERN_SPIDER = 1.5;    // how strongly it lights a spider going past
 
 // --- purple flowers in the grass ---
 static const int    FLOWER_PATCHES = 18;     // the first ones grow round the big trees and the hut
@@ -572,7 +581,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
             else if (id == 2) col = zCol;
             else
             {
-                col = drawBigTree(col, cell, grid, horizonY, id - 3, flash);
+                col = drawBigTree(col, cell, grid, horizonY, id - 3, flash, T);
+                col = drawLanterns(col, cell, grid, T, id - 3, horizonY, dth);
                 col = drawTreeHangers(col, cell, grid, T, tick, flash, horizonY, id - 3);
             }
         }
