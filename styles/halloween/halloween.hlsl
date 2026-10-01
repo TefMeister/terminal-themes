@@ -28,7 +28,7 @@ static const float  SCENE_BRIGHT   = 0.62;   // overall picture brightness (text
 static const float  EDGE_FADE      = 0.09;   // share of each side over which the picture fades to black
 
 // --- sprite sheet layout (matches halloween-sprites.py) ---
-static const int    SHEET_W = 320, SHEET_H = 398;
+static const int    SHEET_W = 384, SHEET_H = 638;
 static const int    PKW = 48, PKH = 40, PK_Y = 0;     // pumpkins: 3 kinds (rows) x 4 candle-flame frames
 static const int    HUTW = 128, HUTH = 120, HUT_X = 192;  // the witch's hut
 static const int    ZW = 24, ZH = 44, Z_Y = 120;      // zombies: 2 kinds x 4 frames
@@ -37,6 +37,7 @@ static const int    SW = 40, SH = 40, S_Y = 232;      // spider from underneath:
 static const int    HW = 24, HH = 24, H_Y = 272;      // hanging spider: 2 frames
 static const int    TW = 64, TH = 80, T_Y = 296;      // dead trees: 2 kinds
 static const int    GW = 16, GH = 22, G_Y = 376;      // gravestones: 4 kinds
+static const int    BPW = 96, BPH = 80, BIG_Y = 398;  // big turned pumpkins: 3 rows x 4 flame frames, drawn twice as fine
 
 // --- sky ---
 static const float3 SKY_TOP        = float3(0.035, 0.015, 0.075);
@@ -85,10 +86,10 @@ static const float  FOG_AMOUNT     = 0.85;
 
 // --- zombies ---
 static const int    ZOMBIES        = 14;
-static const float  ZOMBIE_TRIP    = 95.0;   // typical seconds to shuffle from the horizon to you
+static const float  ZOMBIE_TRIP    = 190.0;  // typical seconds to shuffle from the horizon to you
 static const float  ZOMBIE_FAR     = 0.22;   // size on the horizon
 static const float  ZOMBIE_NEAR    = 3.2;    // size when they reach the front
-static const float  ZOMBIE_LURCH   = 0.85;   // lurches per second (one step to each side)
+static const float  ZOMBIE_LURCH   = 0.60;   // lurches per second (one step to each side), varies per zombie
 static const float  ZOMBIE_LEAN    = 0.20;   // how far the body leans into each lurch
 static const float  ZOMBIE_SWAY    = 3.0;    // how far, in sprite pixels, the body swings side to side
 static const float  ZOMBIE_HAZE    = 0.55;   // far zombies melt into the fog
@@ -104,16 +105,21 @@ static const float  GHOST_OPACITY  = 0.80;
 static const float  WIND           = 0.13;   // how far the wind pushes the sheet to the left
 
 // --- pumpkins (listed back to front) ---
-static const int    PUMPKINS       = 6;
-static const float  PK_X[6]        = { 0.37, 0.64, 0.23, 0.80, 0.95, 0.07 };
-static const float  PK_SCALE[6]    = { 0.62, 0.75, 1.20, 1.50, 2.10, 2.40 };
-static const float  PK_BOTTOM[6]   = { -30, -26, -17, -10, 9, 10 };   // cells below the bottom edge
-static const int    PK_KIND[6]     = { 2, 1, 1, 2, 0, 0 };
+// The pumpkins at the bottom, listed back to front. Each is turned so it looks towards the middle:
+// the ones on the right look left, the ones on the left look right. Sizes and places are shares of the
+// window height, so they keep their shape in any window. A big one stands at the back of each group,
+// partly past the edge of the window, where it fades into the black.
+static const int    PUMPKINS       = 5;
+static const float  PK_SIDE[5]     = { 1, -1, 1, -1, 1 };              // 1 = right group, -1 = left group
+static const float  PK_INSET[5]    = { 0.06, 0.11, 0.30, 0.30, 0.17 }; // middle's distance from that edge
+static const float  PK_SINK[5]     = { 0.04, 0.05, 0.02, 0.02, 0.03 }; // how far the bottom sits below the window
+static const float  PK_HEIGHT[5]   = { 0.42, 0.26, 0.17, 0.14, 0.13 };
+static const int    PK_ROW[5]      = { 0, 2, 1, 0, 2 };                // which turned pumpkin drawing
 static const float3 CANDLE_DEEP    = float3(1.00, 0.30, 0.02);
 static const float3 CANDLE_HOT     = float3(1.00, 0.92, 0.50);
 static const float  CANDLE_GLOW    = 1.9;    // pumpkin faces are brighter than the rest of the picture
 static const float  PUMPKIN_BODY   = 0.60;   // pumpkin skin brightness in the dark
-static const float  POOL_SIZE      = 34.0;   // reach of the orange light on the ground, in cells
+static const float  POOL_SIZE      = 1.1;    // reach of the orange light on the ground, per unit of size
 static const float  HALO_SIZE      = 26.0;   // reach of the light round a small pumpkin, per unit of its size
 static const int    HILL_PUMPKINS  = 4;      // small ones among the gravestones
 static const float  HILL_PK_X[4]   = { 0.33, 0.49, 0.70, 0.90 };

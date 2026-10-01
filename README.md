@@ -51,8 +51,9 @@ of `aquarium.hlsl`) that makes every movement repeat on the dot, so the clip joi
 **New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
 drifting clouds and witches on brooms flying across far away, two rows of hills with dead trees and
 gravestones, a witch's hut on the left with a green-lit window, a smoking chimney and pumpkins on its
-porch, a foggy field with zombies shuffling mindlessly towards you, round candle-lit jack-o'-lanterns
-along the bottom and among the graves, and spiders right on the glass, some dangling from the top on
+porch, a foggy field with zombies each swaying its own way as they shuffle slowly towards you,
+candle-lit jack-o'-lanterns among the graves, two groups of big ones in the bottom corners turned to
+look towards the middle (the biggest half hidden past the right edge), and spiders right on the glass, some dangling from the top on
 a thread and some crawling about on the inside of the screen, so you see their undersides.
 
 Every 45 seconds the top of the sky slowly darkens, then a big old-school sheet ghost rises in the

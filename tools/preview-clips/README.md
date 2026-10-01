@@ -39,7 +39,7 @@ the end, so the join lands on an empty screen; the aquarium's text simply stays 
    for byte as it was.
 
 The Halloween clip uses the same loop mode (a 30 s loop with one ghost visit, set in
-`add-profiles.py`). It was recorded on a 1920x1080 screen in a 1280-wide window at 8 frames a second
+`add-profiles.py`). It was recorded on a 1920x1080 screen in a window opened with `wt --pos 40,40 --size 136,47` (so it clears the taskbar) at 8 frames a second
 and turned into a GIF with Pillow, using one shared colour palette so the file stays near 7 MB.
 
 The sample lines the clips show are in `sample-text.py`. `frames/` is ignored by git.
