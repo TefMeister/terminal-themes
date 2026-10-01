@@ -2,8 +2,9 @@
 // Back to front: a banded night sky with stars, a big moon and drifting clouds; witches on brooms
 // flying across in the distance; two rows of hills with dead trees and gravestones; a foggy field
 // rolling towards you, with zombies walking out of the dark (seen only when lightning lights them);
-// the witch's hut on the left with its glowing window, smoking chimney and pumpkins on the porch;
-// the big sheet ghost that rises in the middle; glowing evil-eyed pumpkins along the bottom; then,
+// the witch's hut on the left, potions brewing behind its window (now and then one goes bang in purple
+// or pink, and the chimney smoke takes the colour); the sheet ghost, which turns up in a different
+// spot each visit, near or far, drifting across; turned pumpkins in the bottom corners; then,
 // nearest of all, spiders dangling from the top and crawling on the inside of the glass (so you see
 // their undersides).
 // Every GHOST_PERIOD seconds the top of the sky slowly darkens, then the ghost appears: three
@@ -28,16 +29,16 @@ static const float  SCENE_BRIGHT   = 0.62;   // overall picture brightness (text
 static const float  EDGE_FADE      = 0.09;   // share of each side over which the picture fades to black
 
 // --- sprite sheet layout (matches halloween-sprites.py) ---
-static const int    SHEET_W = 384, SHEET_H = 638;
+static const int    SHEET_W = 384, SHEET_H = 1078;
 static const int    PKW = 48, PKH = 40, PK_Y = 0;     // pumpkins: 3 kinds (rows) x 4 candle-flame frames
 static const int    HUTW = 128, HUTH = 120, HUT_X = 192;  // the witch's hut
-static const int    ZW = 24, ZH = 44, Z_Y = 120;      // zombies: 2 kinds x 4 frames
-static const int    WW = 40, WH = 24, W_Y = 208;      // witch: 4 frames
-static const int    SW = 40, SH = 40, S_Y = 232;      // spider from underneath: 4 frames
-static const int    HW = 24, HH = 24, H_Y = 272;      // hanging spider: 2 frames
-static const int    TW = 64, TH = 80, T_Y = 296;      // dead trees: 2 kinds
-static const int    GW = 16, GH = 22, G_Y = 376;      // gravestones: 4 kinds
-static const int    BPW = 96, BPH = 80, BIG_Y = 398;  // big turned pumpkins: 3 rows x 4 flame frames, drawn twice as fine
+static const int    ZW = 32, ZH = 44, Z_Y = 120;      // zombies: 12 rows x 8 walk frames, row = (view * 2 + arms) * 2 + outfit
+static const int    WW = 40, WH = 24, W_Y = 648;      // witch: 4 frames
+static const int    SW = 40, SH = 40, S_Y = 672;      // spider from underneath: 4 frames
+static const int    HW = 24, HH = 24, H_Y = 712;      // hanging spider: 2 frames
+static const int    TW = 64, TH = 80, T_Y = 736;      // dead trees: 2 kinds
+static const int    GW = 16, GH = 22, G_Y = 816;      // gravestones: 4 kinds
+static const int    BPW = 96, BPH = 80, BIG_Y = 838;  // big turned pumpkins: 3 rows x 4 flame frames, drawn twice as fine
 
 // --- sky ---
 static const float3 SKY_TOP        = float3(0.035, 0.015, 0.075);
@@ -92,11 +93,27 @@ static const float  ZOMBIE_NEAR    = 3.2;    // size when they reach the front
 static const float  ZOMBIE_LURCH   = 0.60;   // lurches per second (one step to each side), varies per zombie
 static const float  ZOMBIE_LEAN    = 0.20;   // how far the body leans into each lurch
 static const float  ZOMBIE_SWAY    = 3.0;    // how far, in sprite pixels, the body swings side to side
-static const float  ZOMBIE_HAZE    = 0.55;   // far zombies melt into the fog
+static const float  ZOMBIE_HAZE    = 0.30;   // far zombies melt a little into the fog
+static const float  ZOMBIE_AMBIENT = 0.10;   // moonlight on them between flashes, so they read as solid
+static const int    ZOMBIE_FRAMES  = 8;      // drawings per stride (two steps)
+static const float  ZOMBIE_FRONT   = 0.45;   // share walking straight at you...
+static const float  ZOMBIE_DIAG    = 0.27;   // ...at 45 degrees (the rest walk side on, across the field)
+static const float  ZOMBIE_DRIFT   = 0.40;   // how far a 45-degree walker drifts across (share of the width)
+static const float  ZOMBIE_STRIDE  = 14.0;   // sprite pixels covered per stride, so side-on feet do not slide
+static const float  ZOMBIE_ARMS_OUT= 0.5;    // share holding their arms out in front
 
 // --- the ghost ---
-static const float  GHOST_HEIGHT   = 0.58;   // share of the height
-static const float  GHOST_TOP      = 0.10;
+// Each visit uses the next of these spots. X0 -> X1 is where it drifts across the window (shares of
+// the width, crown middle), Y its crown and SIZE its height (shares of the height). DEPTH places it in
+// the scene: -1 = far off, behind the trees and gravestones on the hill; otherwise a share of the field
+// (0 horizon, 1 bottom), so the hut (at HUT_DEPTH) and nearer zombies can stand in front of it.
+static const int    GHOST_SPOTS    = 10;
+static const float  GHOST_X0[10]   = { 0.70, 0.28, 0.12, 0.86, 0.22, 0.80, 0.40, 0.45, 0.64, 0.30 };
+static const float  GHOST_X1[10]   = { 0.38, 0.60, 0.42, 0.52, 0.58, 0.48, 0.82, 0.06, 0.30, 0.66 };
+static const float  GHOST_Y[10]    = { 0.08, 0.40, 0.32, 0.43, 0.04, 0.26, 0.45, 0.30, 0.15, 0.22 };
+static const float  GHOST_SIZE[10] = { 0.58, 0.20, 0.30, 0.16, 0.66, 0.38, 0.13, 0.27, 0.48, 0.42 };
+static const float  GHOST_DEPTH[10]= { 0.95, -1.0, 0.05, -1.0, 0.95, 0.35, -1.0, 0.05, 0.60, 0.30 };
+static const float  GHOST_DRIFT_SWAY = 0.04; // side-to-side drift while it hovers, per unit of its size
 static const float3 GHOST_LIGHT    = float3(0.93, 0.95, 1.00);
 static const float3 GHOST_SHADE    = float3(0.48, 0.50, 0.66);
 static const float3 GHOST_EDGE     = float3(0.30, 0.30, 0.45);
@@ -130,10 +147,22 @@ static const float  HUT_POS        = 0.14;   // across the width, of its middle
 static const float  HUT_SIZE       = 0.42;   // height, as a share of the window
 static const float  HUT_DEPTH      = 0.10;   // how far in front of the horizon it stands (share of the field)
 static const float  HUT_DARK       = 0.85;   // how much the moon shows of it
-static const float3 WINDOW_COLOUR  = float3(0.62, 1.00, 0.38);   // a witchy green glow
+// potions brewing inside: the window light drifts between these colours, bubbling...
+static const float3 BREW_COLOURS[4]= { float3(0.62, 1.00, 0.38), float3(0.70, 0.35, 1.00), float3(1.00, 0.40, 0.80), float3(0.35, 0.95, 0.85) };
+static const float  BREW_CHANGE    = 7.0;    // seconds per colour
+// ...and every so often something goes bang: quick flashes of purple or pink, and the smoke that
+// leaves the chimney straight after carries the same colour up into the sky
+static const float3 BURST_PURPLE   = float3(0.75, 0.30, 1.00);
+static const float3 BURST_PINK     = float3(1.00, 0.35, 0.78);
+static const float  BURST_GAP      = 4.5;    // typical seconds between bangs
+static const float  BURST_CHANCE   = 0.65;   // share of those chances that actually go bang
+static const float  BURST_GLOW     = 2.4;    // how bright a bang lights the window
+static const float  BURST_REACH    = 60.0;   // reach of the light thrown round the hut, in hut pixels
+static const float  BURST_SMOKE    = 2.0;    // seconds of smoke after a bang that carry its colour
 static const float  PORCH_PK_X[2]  = { 24.0, 104.0 };           // pumpkins on the porch, in hut pixels
 static const float  PORCH_PK_SCALE = 0.24;   // their size, relative to the hut's
 static const float  SMOKE_RISE     = 0.25;   // how fast the smoke climbs
+static const float  SMOKE_HEIGHT   = 80.0;   // how high the column reaches, in hut pixels
 static const float3 SMOKE_COLOUR   = float3(0.34, 0.31, 0.38);
 static const float3 RIM_COLOUR     = float3(0.06, 0.06, 0.10);   // moonlight on the zombies' edges
 
@@ -143,8 +172,9 @@ static const float  WITCH_TRIP     = 22.0;   // typical seconds to cross the sky
 
 // --- spiders ---
 static const int    CRAWLERS       = 3;
-static const float  CRAWL_SCALE    = 1.7;    // big: they are right on the glass
-static const float  CRAWL_STEP     = 6.0;    // seconds per walk-and-rest stretch
+static const float  CRAWL_SCALE    = 0.9;    // on the glass, but small and quick
+static const float  CRAWL_SPEED    = 0.28;   // how quickly they wander (radians of their curvy path per second)
+static const float  CRAWL_ROAM     = 0.62;   // how far from the middle they roam (past the edges, so they come and go)
 static const int    HANGERS        = 2;
 static const float  HANG_SCALE     = 1.6;
 static const float  HANG_CYCLE     = 26.0;   // seconds between drops of the same spider
@@ -366,6 +396,20 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float ghostEnd = s1 + GHOST_STAY + GHOST_FADE_OUT;
     float ghostA = saturate((gt - s1 + 0.1) / GHOST_FADE_IN) * saturate((ghostEnd - gt) / GHOST_FADE_OUT);
     float dim = smoothstep(s1 - DIM_LEAD, s1, gt) * (1.0 - smoothstep(ghostEnd, ghostEnd + DIM_RELEASE, gt));
+    // the darkening of the upper night, worked out now: the ghost is drawn among the scenery but must
+    // not darken with it, so it is drawn brighter by the same amount (exact, as both are just multiplies)
+    float reach = steps(saturate(1.0 - c.y / (grid.y * DIM_REACH)), 6.0, dth);
+    float dimMul = 1.0 - DIM_AMOUNT * dim * reach * (1.0 - 0.85 * flash);
+    float lift = 1.0 / max(dimMul, 0.05);
+    // this visit's spot: where it drifts, how big, and how deep in the scene
+    int   spot = pmod((int)n, GHOST_SPOTS);
+    float gDepth = GHOST_DEPTH[spot];
+    float gBase = horizonY + (grid.y - horizonY) * gDepth;          // the ground line it hovers over
+    float gu = saturate((gt - s1 + 0.1) / (GHOST_STAY + GHOST_FADE_OUT));
+    float2 gCrown = float2(lerp(GHOST_X0[spot], GHOST_X1[spot], lerp(gu, smoothstep(0.0, 1.0, gu), 0.5)) * grid.x,
+                           GHOST_Y[spot] * grid.y);
+    float gSize = GHOST_SIZE[spot] * grid.y;
+    bool gLeft = GHOST_X1[spot] < GHOST_X0[spot];
 
     // --- sky ---
     float v = c.y / max(horizonY, 1.0);
@@ -406,6 +450,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     // --- hills: the far row lights up in a flash, the near row stays almost black ---
     float hf = hillFar(c.x, grid), hn = hillNear(c.x, grid);
     if (c.y >= hf) col = HILL_FAR * (1.0 + steps(saturate((c.y - hf) / 20.0), 3.0, dth) * -0.3) + FLASH_SKY * flash * HILL_FAR_FLASH * 0.5;
+    // a far-off ghost: the trees, gravestones and near hill all stand in front of it
+    if (gDepth < 0.0) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
     [branch] if (sprites) col = drawYard(col, cell, grid, flash);
     if (c.y >= hn && c.y < horizonY) col = HILL_NEAR + FLASH_SKY * flash * HILL_NEAR_FLASH * 0.4;
     [branch] if (sprites) col = drawHillPumpkins(col, cell, grid, T, tick, flash, dth);
@@ -437,16 +483,20 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     {
         float zFeet;
         col = drawZombies(col, cell, grid, T, tick, flash, horizonY, zFeet);
+        bool zombieFront = zFeet > gBase;
+        if (gDepth >= 0.0 && gDepth <= HUT_DEPTH && !zombieFront)          // behind the hut
+            col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
         col = drawHut(col, cell, grid, T, flash, fog, horizonY, zFeet, dth);
         col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
         col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
+        if (gDepth > HUT_DEPTH && !zombieFront)                            // in front of the hut
+            col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
     }
+    else if (gDepth >= 0.0) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
 
     // --- before and during the ghost's visit the upper part of the night darkens ---
-    float reach = steps(saturate(1.0 - c.y / (grid.y * DIM_REACH)), 6.0, dth);
-    col *= 1.0 - DIM_AMOUNT * dim * reach * (1.0 - 0.85 * flash);
+    col *= dimMul;
 
-    col = drawGhost(col, cell, grid, T, ghostA, flash, dth);
     [branch] if (sprites)
     {
         col = drawPumpkins(col, cell, grid, T, tick, flash);

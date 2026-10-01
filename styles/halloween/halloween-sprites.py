@@ -4,7 +4,8 @@ Layout (must match the constants in halloween.hlsl; the script prints them):
   pumpkins      3 kinds x 4 frames,   PKW x PKH, one row per kind (the frames are the candle flame)
   hut           1,                    HUTW x HUTH, to the right of the pumpkins
   big pumpkins  3 x 4 frames,         BPW x BPH, at the bottom: turned to look left, drawn twice as fine
-  zombies       2 kinds x 4 frames,   ZW x ZH, one row per kind (front view, walking towards you)
+  zombies       12 rows x 8 frames,   ZW x ZH, row = (view * 2 + arms) * 2 + outfit; view 0 towards you,
+                                      1 at 45 degrees, 2 side on (all walking right); arms 0 out, 1 hanging
   witch         4 frames,             WW x WH (a silhouette mask, facing right)
   spider        4 frames,             SW x SH (seen from underneath, crawling on the glass, facing up)
   hanging       2 frames,             HW x HH (seen from behind, head down, thread at the top)
@@ -19,13 +20,20 @@ Run:  python halloween-sprites.py
 """
 import math
 import os
+import importlib.util
 import random
 from PIL import Image
+
+_spec = importlib.util.spec_from_file_location(
+    "halloween_zombies", os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-zombies.py"))
+ZOMBIE_ART = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ZOMBIE_ART)
 
 KEY = (255, 0, 255)
 
 PKW, PKH = 48, 40
-ZW, ZH = 24, 44
+ZW, ZH = ZOMBIE_ART.ZW2, ZOMBIE_ART.ZH2
+Z_ROWS = len(ZOMBIE_ART.VIEWS) * len(ZOMBIE_ART.ARMS) * 2
 WW, WH = 40, 24
 SW, SH = 40, 40
 HW, HH = 24, 24
@@ -36,7 +44,7 @@ HUTW, HUTH = 128, 120
 PK_Y = 0
 HUT_X = 4 * PKW
 Z_Y = max(PK_Y + 3 * PKH, HUTH)
-W_Y = Z_Y + 2 * ZH
+W_Y = Z_Y + Z_ROWS * ZH
 S_Y = W_Y + WH
 H_Y = S_Y + SH
 T_Y = H_Y + HH
@@ -422,89 +430,11 @@ def draw_hut():
     return c
 
 
-# ---------------------------------------------------------------- zombies (front view)
+# ---------------------------------------------------------------- zombies (drawn in halloween-zombies.py)
 
-SKIN = [(112, 142, 92), (128, 128, 98)]
-SHIRT = [(64, 74, 96), (98, 64, 44)]
-PANTS = [(46, 44, 52), (58, 66, 50)]
-
-
-def draw_zombie(kind, frame):
+def zombie_cell(view, arms, kind, frame):
     c = Cell(ZW, ZH)
-    rnd = random.Random(kind * 31 + 5)
-    skin, shirt, pants = SKIN[kind], SHIRT[kind], PANTS[kind]
-    sway = [-1, 0, 1, 0][frame]
-    cx = ZW / 2 + sway * 0.5
-    # legs: the leg stepping towards us reaches lower and is a little wider
-    hip = 26
-    for side in (-1, 1):
-        fwd = (frame == 0 and side < 0) or (frame == 2 and side > 0)
-        back = (frame == 0 and side > 0) or (frame == 2 and side < 0)
-        foot = ZH - 1 if fwd else (ZH - 4 if back else ZH - 2)
-        lx = cx + side * 3 - (1 if side < 0 else 0)
-        for y in range(hip, foot + 1):
-            w = 3 if not fwd else 4
-            for i in range(w):
-                col = pants if (y + i + kind) % 7 else shade(pants, 0.7)
-                c.put(lx - w // 2 + i + (0 if y < foot - 1 else side), y, col)
-        # torn trouser end with a bare ankle, then a shoe
-        c.put(lx, foot - 2, skin)
-        for i in range(-2, 2):
-            c.put(lx + i, foot, (40, 34, 30))
-    # torso, ragged shirt
-    for y in range(12, hip + 1):
-        hw = 6 if y < 22 else 5
-        for x in range(-hw, hw + 1):
-            col = shirt
-            if (x * 7 + y * 3 + kind) % 11 == 0:
-                col = shade(shirt, 0.65)            # stains and tears
-            if y > hip - 2 and rnd.random() < 0.35:
-                continue                          # ragged hem
-            c.put(cx + x - 0.5, y, col)
-    # a tear showing ribs on one side
-    for y in range(16, 21):
-        c.put(cx + 2, y, skin if y % 2 else shade(skin, 0.6))
-    # arms reaching forward: seen from the front they are short and point at us, hands up
-    reach = [0, 1, 0, -1][frame]
-    for side in (-1, 1):
-        sx = cx + side * 7 - (1 if side < 0 else 0)
-        lift = reach * side
-        for y in range(13, 19):
-            c.put(sx, y + lift, shirt)
-            c.put(sx + side, y + lift, shade(shirt, 0.8))
-        # forearm and hand coming out towards us, drawn bigger and lower (closer)
-        hx = sx + side * 1
-        for y in range(18, 22):
-            for i in range(3):
-                c.put(hx - 1 + i, y + lift, skin)
-        for f in range(4):
-            c.put(hx - 2 + f + (1 if side > 0 else 0), 22 + lift, shade(skin, 0.75))
-    # neck and lolling head
-    tilt = [1, 0, -1, 0][frame] if kind == 0 else [0, 1, 0, 1][frame]
-    for y in range(10, 12):
-        c.put(cx - 1, y, shade(skin, 0.8))
-        c.put(cx, y, shade(skin, 0.8))
-    hx0 = cx - 4 + tilt * 0.5
-    for y in range(1, 11):
-        hw = 3.5 if 2 < y < 9 else 2.5
-        for x in range(int(-hw), int(hw) + 1):
-            col = skin
-            if x <= -2:
-                col = shade(skin, 0.8)
-            c.put(hx0 + 4 + x, y, col)
-    # hair (patchy), sunken eyes, open jaw
-    for x in range(-3, 4):
-        if (x + kind) % 3:
-            c.put(hx0 + 4 + x, 1, (52, 44, 36))
-    for side in (-1, 1):
-        ex = hx0 + 4 + side * 2 - (1 if side < 0 else 0)
-        c.put(ex, 5, (28, 22, 24))
-        c.put(ex + (1 if side < 0 else 0), 5, (28, 22, 24))
-        c.put(ex, 4, shade(skin, 0.55))
-        c.put(ex + 1 if side < 0 else ex, 6, (190, 40, 30) if frame % 2 == kind else (28, 22, 24))
-    for x in range(-1, 2):
-        c.put(hx0 + 4 + x, 8, (40, 20, 22))
-    c.put(hx0 + 4, 9, (40, 20, 22))
+    c.px = ZOMBIE_ART.draw_zombie(view, arms, kind, frame)
     c.outline(lambda col: shade(col, 0.55))
     return c
 
@@ -727,9 +657,12 @@ def main():
     for row, (kind, yaw) in enumerate(BIG_PUMPKINS):
         for f in range(4):
             draw_pumpkin(kind, f, yaw, 2).blit(img, f * BPW, BIG_Y + row * BPH)
-    for k in range(2):
-        for f in range(4):
-            draw_zombie(k, f).blit(img, f * ZW, Z_Y + k * ZH)
+    for view in range(len(ZOMBIE_ART.VIEWS)):
+        for arms in range(len(ZOMBIE_ART.ARMS)):
+            for kind in range(2):
+                row = (view * 2 + arms) * 2 + kind
+                for f in range(ZOMBIE_ART.WALK_FRAMES):
+                    zombie_cell(view, arms, kind, f).blit(img, f * ZW, Z_Y + row * ZH)
     for f in range(4):
         draw_witch(f).blit(img, f * WW, W_Y)
         draw_spider(f).blit(img, f * SW, S_Y)
