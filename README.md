@@ -46,8 +46,7 @@ a humpback whale glides across, far off or a little nearer, never close.
 
 ![The ocean style, moving](preview/ocean.gif)
 
-The clip above still shows the earlier aquarium; a new one is on its way. In the terminal the ocean
-never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top of `ocean.hlsl`) that
+In the terminal the ocean never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top of `ocean.hlsl`) that
 makes every movement repeat on the dot, so the clip joins up without a seam.
 
 ### [`halloween`](styles/halloween/)

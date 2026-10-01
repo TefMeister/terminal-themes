@@ -406,9 +406,9 @@ float3 drawWhale(float3 col, int2 cell, float2 grid, float top, float horizon, f
 float3 schoolCentre(float t)
 {
     float w = loopRate(SCHOOL_SPEED);
-    return float3(0.5 + 0.30 * sin(t * w * 1.0 + 1.0) + 0.10 * sin(t * w * 2.7 + 4.0),
-                  0.45 + 0.20 * sin(t * w * 1.6 + 2.0) + 0.06 * sin(t * w * 3.9),
-                  0.50 + 0.25 * sin(t * w * 0.7 + 3.0));
+    return float3(0.5 + 0.30 * sin(t * w * 1.0 + 1.0) + 0.10 * sin(t * w * 3.0 + 4.0),
+                  0.45 + 0.20 * sin(t * w * 2.0 + 2.0) + 0.06 * sin(t * w * 4.0),
+                  0.50 + 0.25 * sin(t * w * 1.0 + 3.0));
 }
 
 // the small fish of the school nearest the viewer at this cell. Each follows the school's path a
@@ -488,7 +488,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         // daylight: a banded blue sky, paler near the sea, with a few soft clouds drifting by
         float v = cell.y / max(top, 1.0);
         col = lerp(SKY_TOP, SKY_LOW, floor(v * SKY_BANDS + dth) / SKY_BANDS);
-        float2 cp = float2(cx * 0.012 + T * loopRate(CLOUD_DRIFT * TAU) / TAU, cell.y * 0.06);
+        float2 cp = float2(cx * 0.012 + (LOOP_SECONDS > 0.0 ? 0.0 : T * CLOUD_DRIFT), cell.y * 0.06);
         float cl = noise2(cp) * 0.7 + noise2(cp * 2.5 + 3.0) * 0.3;
         cl *= saturate(1.0 - abs(v - 0.4) / 0.45);
         if (cl > 0.55) col = lerp(col, CLOUD_COLOUR, floor(saturate((cl - 0.55) / 0.15) * 3.0 + dth) / 3.0 * 0.8);
@@ -497,7 +497,9 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     {
         // the surface line, with sunlight glinting on it here and there
         col = SURFACE_COLOUR;
-        if (hash2(float2(floor(cx / 2.0), floor(T * 0.8))) > 0.93) col = GLINT_COLOUR;
+        float glint = floor(T * 0.75);
+        if (LOOP_SECONDS > 0.0) glint = (float)pmod((int)glint, max(1, (int)round(LOOP_SECONDS * 0.75)));
+        if (hash2(float2(floor(cx / 2.0), glint)) > 0.93) col = GLINT_COLOUR;
     }
     else
     {

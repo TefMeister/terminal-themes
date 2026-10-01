@@ -314,11 +314,11 @@ float windowFlicker(float T)
 // the potion brewing inside: drifting slowly from one colour to the next, bubbling as it goes
 float3 brewColour(float T)
 {
-    float f = loopFreq(1.0 / BREW_CHANGE);
+    float f = loopFreq(1.0 / (BREW_CHANGE * 4.0)) * 4.0;          // the whole round of four colours fits the loop
     float p = T * f;
     int i = pmod((int)floor(p), 4);
     float3 c = lerp(BREW_COLOURS[i], BREW_COLOURS[(i + 1) % 4], smoothstep(0.6, 1.0, frac(p)));
-    float bubble = 0.85 + 0.15 * noise1(T * 6.0) * noise1(T * 2.3 + 4.0);
+    float bubble = 0.85 + 0.15 * noise1w(T * 6.0, loopSpan(6.0)) * noise1w(T * 2.0 + 4.0, loopSpan(2.0));
     return c * bubble * windowFlicker(T);
 }
 
@@ -395,7 +395,8 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float halfw = (2.5 + h * 10.0) * sc * (1.0 + 0.4 * tint.a);
     float across = abs(c.x - mid) / halfw;
     if (across > 1.3) return col;
-    float lumps = noise2(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * loopRate(SMOKE_RISE * TAU) / TAU * 8.0));
+    float rise = loopRate(SMOKE_RISE * TAU) / TAU * 8.0;
+    float lumps = noise2w(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * rise), float2(1e5, loopSpan(rise)));
     float dens = ((1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3) * (1.0 - smoothstep(0.55, 1.0, h));
     if (dens < 0.15 || dth > dens * 1.6) return col;
     float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, steps(saturate(tint.a * 1.3), 4.0, dth));

@@ -154,7 +154,7 @@ float3 drawRaven(float3 col, int2 cell, float2 grid, float T, float flash, int i
     int sx, sy;
     if (sitting)
     {
-        int look = hash(floor(T * 0.4) * 1.3 + fi * 7.0) > 0.75 ? 1 : 0;   // looking round now and then
+        int look = hash(loopIndex(floor(T * 0.4), 0.4) * 1.3 + fi * 7.0) > 0.75 ? 1 : 0;   // looking round now and then
         sx = RAVEN_X + look * RAVEN_W;
         sy = BT_Y + RAVEN_H;
         pos -= float2(RAVEN_W * 0.5, RAVEN_H) * rs;
@@ -165,7 +165,7 @@ float3 drawRaven(float3 col, int2 cell, float2 grid, float T, float flash, int i
         // up and away in a widening curve; coming back it follows the same curve the other way round
         float e = u * u;
         pos += float2(away * (e * 1.3 + u * 0.15) * grid.x * 0.55, -(u * 0.8 + e * 0.5) * grid.y * 0.45)
-             + float2(0.0, sin(T * 9.0 + fi) * 1.2 * rs);
+             + float2(0.0, sin(T * loopRate(9.0) + fi) * 1.2 * rs);
         if (!leaving) faceRight = !faceRight;
         int frame = u < 0.04 ? 1 : pmod((int)floor(T * RAVEN_FLAP + fi), 4);   // a glide just before touching down
         sx = RAVEN_X + frame * RAVEN_W;

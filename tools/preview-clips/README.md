@@ -38,8 +38,21 @@ the end, so the join lands on an empty screen; the ocean's text simply stays put
 4. `python add-profiles.py remove` takes the profiles out again and checks the settings file is byte
    for byte as it was.
 
-The Halloween clip uses the same loop mode (a 30 s loop with one ghost visit, set in
-`add-profiles.py`). It was recorded on a 1920x1080 screen in a window opened with `wt --pos 40,40 --size 136,47` (so it clears the taskbar) at 8 frames a second
-and turned into a GIF with Pillow, using one shared colour palette so the file stays near 7 MB.
+**The ocean and Halloween clips (2026-10-01 onwards)** are recorded with `record-window.ps1`, which
+asks the terminal window to draw itself instead of copying the screen, so nothing else open on the
+screen can ever end up in a frame. It opens its own window (136 x 47 characters), waits for the shader
+to build, records, and closes it. Both styles use a 32 s loop (Halloween with one ghost visit; see
+`add-profiles.py`); 32 s fits a whole number of every animation in both. Then `make-gif.py` finds where
+the loop closes, says how many pixels still differ (0 for the ocean, a handful for Halloween), and
+saves a GIF with one shared colour palette:
+
+```powershell
+python add-profiles.py add
+.\record-window.ps1 -ProfileName "Preview: ocean" -OutDir frames\ocean -Seconds 42 -IntervalMs 200 -SettleSec 5
+.\record-window.ps1 -ProfileName "Preview: halloween" -OutDir frames\halloween -Seconds 44 -IntervalMs 125 -SettleSec 12
+python make-gif.py frames\ocean ..\..\preview\ocean.gif 160 200
+python make-gif.py frames\halloween ..\..\preview\halloween.gif 256 125
+python add-profiles.py remove
+```
 
 The sample lines the clips show are in `sample-text.py`. `frames/` is ignored by git.
