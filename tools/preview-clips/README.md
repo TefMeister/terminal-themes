@@ -38,4 +38,8 @@ the end, so the join lands on an empty screen; the aquarium's text simply stays 
 4. `python add-profiles.py remove` takes the profiles out again and checks the settings file is byte
    for byte as it was.
 
+The Halloween clip uses the same loop mode (a 30 s loop with one ghost visit, set in
+`add-profiles.py`). It was recorded on a 1920x1080 screen in a 1280-wide window at 8 frames a second
+and turned into a GIF with Pillow, using one shared colour palette so the file stays near 7 MB.
+
 The sample lines the clips show are in `sample-text.py`. `frames/` is ignored by git.

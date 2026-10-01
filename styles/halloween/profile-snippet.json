@@ -1,0 +1,37 @@
+{
+    "_comment": "Paste the profile into profiles -> list and the scheme into schemes in Windows Terminal's settings.json. Replace <FOLDER> with where you put these files, using forward slashes. The scheme's background must stay pure black: the shader treats anything that is not black as text.",
+    "profile": {
+        "name": "Halloween Claude",
+        "commandline": "claude.exe",
+        "colorScheme": "Halloween",
+        "cursorShape": "bar",
+        "padding": "16",
+        "font": { "face": "Cascadia Code", "size": 13 },
+        "icon": "🎃",
+        "experimental.pixelShaderPath": "<FOLDER>/styles/halloween/halloween.hlsl",
+        "experimental.pixelShaderImagePath": "<FOLDER>/styles/halloween/halloween-sheet.png"
+    },
+    "scheme": {
+        "name": "Halloween",
+        "background": "#000000",
+        "foreground": "#EDE3D1",
+        "cursorColor": "#FF8A1F",
+        "selectionBackground": "#4A2A66",
+        "black": "#000000",
+        "red": "#FF5A4E",
+        "brightRed": "#FF8C80",
+        "green": "#9BE36B",
+        "brightGreen": "#C2F59E",
+        "yellow": "#FFB347",
+        "brightYellow": "#FFD58A",
+        "blue": "#8A9BFF",
+        "brightBlue": "#B5C0FF",
+        "purple": "#C38DFF",
+        "brightPurple": "#DDBDFF",
+        "cyan": "#7FE0D0",
+        "brightCyan": "#B0F2E8",
+        "white": "#D8CFC0",
+        "brightWhite": "#FFF8EC",
+        "brightBlack": "#8A7A96"
+    }
+}
