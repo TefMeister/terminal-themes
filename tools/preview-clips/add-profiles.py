@@ -5,7 +5,7 @@ the clips; removes them again afterwards.
     python add-profiles.py remove    takes them out; the file must end up byte for byte as before
 
 The edit is done on the text of settings.json, so its own layout and comments are left alone.
-The aquarium and Halloween profiles point at copies of their shaders with LOOP_SECONDS set,
+The ocean and Halloween profiles point at copies of their shaders with LOOP_SECONDS set,
 written next to this script, so the shaders in styles/ are never changed.
 """
 import os, re, shutil, sys
@@ -18,7 +18,7 @@ SETTINGS = os.path.expandvars(
 BACKUP = SETTINGS + ".bak-preview-clips"
 # style -> (shader in styles/, loop seconds, other settings changed in the copy)
 LOOPS = {
-    "aquarium": ("aquarium/aquarium.hlsl", 32, {}),
+    "ocean": ("ocean/ocean.hlsl", 32, {}),
     # one ghost visit and some quiet night after it
     "halloween": ("halloween/halloween.hlsl", 30, {"GHOST_STAY": 12}),
 }
@@ -50,8 +50,8 @@ BLOCK = BEGIN + "".join([
             STYLES + "green-monitor/robco.hlsl", None, "filledBox"),
     profile("Preview: sharp-scanlines", "Campbell", "Cascadia Code", 13,
             STYLES + "sharp-scanlines/sharp-scanlines.hlsl", None, "bar", "typing 12"),
-    profile("Preview: aquarium", "Aquarium", "Cascadia Code", 13,
-            HERE + "/aquarium-loop.hlsl", STYLES + "aquarium/aquarium-sheet.png", "bar", "static"),
+    profile("Preview: ocean", "Ocean", "Cascadia Code", 13,
+            HERE + "/ocean-loop.hlsl", STYLES + "ocean/ocean-sheet.png", "bar", "static"),
     profile("Preview: halloween", "Halloween", "Cascadia Code", 13,
             HERE + "/halloween-loop.hlsl", STYLES + "halloween/halloween-sheet.png", "bar", "static halloween"),
 ]) + END

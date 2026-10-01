@@ -3,7 +3,7 @@
     python sample-text.py typing <loop seconds>   blank, then the lines type out, hold, and the
                                                    screen clears again exactly one loop later
     python sample-text.py static                   the lines appear at once and stay (for the
-                                                   aquarium, whose own loop mode sets the length)
+                                                   ocean, whose own loop mode sets the length)
     python sample-text.py static halloween         the same, with lines for the Halloween style
 
 The cursor is hidden throughout: a blinking cursor would never be in step with the loop.
@@ -17,9 +17,9 @@ LINES = [
     ("", 0),
     ("● Sure. The tank is drawn by a small shader, so each fish can fade by how far away it is.", 0.015),
     ("", 0),
-    ("● Read styles/aquarium/aquarium.hlsl", 0.01),
+    ("● Read styles/ocean/ocean.hlsl", 0.01),
     ("", 0),
-    ("● Edit aquarium.hlsl: fish brightness and colour now follow their distance", 0.01),
+    ("● Edit ocean.hlsl: fish brightness and colour now follow their distance", 0.01),
     ("", 0),
     ("● Done. Far fish are dim and grey, close ones bright and vivid. Open a new tab to see it.", 0.015),
     ("", 0),

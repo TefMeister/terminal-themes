@@ -1,9 +1,9 @@
 # Records the Windows Terminal window while a preview profile runs in a new tab.
 #
-#   .\record.ps1 -ProfileName "Preview: aquarium" -OutDir frames\aquarium -Seconds 38 -IntervalMs 50
+#   .\record.ps1 -ProfileName "Preview: ocean" -OutDir frames\ocean -Seconds 38 -IntervalMs 50
 #   .\record.ps1 -ProfileName "Preview: green-monitor" -OutDir frames\gm -Seconds 26 -IntervalMs 200 -KeepAll
 #
-# Without -KeepAll only frames that differ from the previous one are saved (for the aquarium, which
+# Without -KeepAll only frames that differ from the previous one are saved (for the ocean, which
 # changes 5 times a second on its own clock); with it, every capture is saved on the fixed interval.
 # Frames land in OutDir as u0000.png, u0001.png ... plus times.txt (frame number, milliseconds).
 # The window is maximised first, so every clip has the same size.

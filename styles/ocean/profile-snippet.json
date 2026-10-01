@@ -1,18 +1,18 @@
 {
     "_comment": "Paste the profile into profiles -> list and the scheme into schemes in Windows Terminal's settings.json. Replace <FOLDER> with where you put these files, using forward slashes. The scheme's background must stay pure black: the shader treats anything that is not black as text.",
     "profile": {
-        "name": "Aquarium Claude",
+        "name": "Ocean Claude",
         "commandline": "claude.exe",
-        "colorScheme": "Aquarium",
+        "colorScheme": "Ocean",
         "cursorShape": "bar",
         "padding": "16",
         "font": { "face": "Cascadia Code", "size": 13 },
-        "icon": "🐠",
-        "experimental.pixelShaderPath": "<FOLDER>/styles/aquarium/aquarium.hlsl",
-        "experimental.pixelShaderImagePath": "<FOLDER>/styles/aquarium/aquarium-sheet.png"
+        "icon": "🌊",
+        "experimental.pixelShaderPath": "<FOLDER>/styles/ocean/ocean.hlsl",
+        "experimental.pixelShaderImagePath": "<FOLDER>/styles/ocean/ocean-sheet.png"
     },
     "scheme": {
-        "name": "Aquarium",
+        "name": "Ocean",
         "background": "#000000",
         "foreground": "#D6EEE8",
         "cursorColor": "#FFA866",
