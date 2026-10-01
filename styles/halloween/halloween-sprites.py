@@ -4,6 +4,7 @@ Layout (must match the constants in halloween.hlsl; the script prints them):
   pumpkins      3 kinds x 4 frames,   PKW x PKH, one row per kind (the frames are the candle flame)
   hut           1,                    HUTW x HUTH, to the right of the pumpkins
   big pumpkins  3 x 4 frames,         BPW x BPH, at the bottom: turned to look left, drawn twice as fine
+  big trees     2 kinds,              BTW x BTH, at the very bottom (drawn in halloween-trees.py)
   zombies       12 rows x 8 frames,   ZW x ZH, row = (view * 2 + arms) * 2 + outfit; view 0 towards you,
                                       1 at 45 degrees, 2 side on (all walking right); arms 0 out, 1 hanging
   witch         4 frames,             WW x WH (a silhouette mask, facing right)
@@ -16,6 +17,7 @@ Light codes, read by the shader (red is 255 or close to it, blue is the code):
   blue 7  candle light seen through a pumpkin's holes; green is the brightness. Flickers.
   blue 8  lit by the candle but keeps its own colour (wax, cut flesh). Flickers with it.
   blue 9  the hut's window light; green is the brightness.
+  blue 5  a leaf on a big tree (any red): shown in its own colour, a little even in the dark.
 Run:  python halloween-sprites.py
 """
 import math
@@ -28,6 +30,10 @@ _spec = importlib.util.spec_from_file_location(
     "halloween_zombies", os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-zombies.py"))
 ZOMBIE_ART = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ZOMBIE_ART)
+_spec = importlib.util.spec_from_file_location(
+    "halloween_trees", os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-trees.py"))
+TREE_ART = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(TREE_ART)
 
 KEY = (255, 0, 255)
 
@@ -52,7 +58,9 @@ G_Y = T_Y + TH
 BPW, BPH = PKW * 2, PKH * 2
 BIG_Y = G_Y + GH
 SHEET_W = max(HUT_X + HUTW, 4 * BPW)
-SHEET_H = BIG_Y + 3 * BPH
+BTW, BTH = TREE_ART.BTW, TREE_ART.BTH
+BT_Y = BIG_Y + 3 * BPH
+SHEET_H = BT_Y + BTH
 
 
 def clamp(v):
@@ -671,10 +679,17 @@ def main():
         draw_tree(f).blit(img, f * TW, T_Y)
     for k in range(4):
         draw_tomb(k).blit(img, k * GW, G_Y)
+    anchors = []
+    for k in range(TREE_ART.KINDS):
+        px, a = TREE_ART.draw_tree(k)
+        for (x, y), col in px.items():
+            img.putpixel((k * BTW + x, BT_Y + y), col)
+        anchors += a
+    print("BT_ANCHOR = { " + ", ".join(f"float2({x}, {y})" for x, y in anchors) + " }")
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-sheet.png")
     img.save(out)
     print("wrote", out, img.size)
-    print(f"BIG_Y={BIG_Y} SHEET={SHEET_W}x{SHEET_H} PK_Y={PK_Y} HUT_X={HUT_X} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
+    print(f"BT_Y={BT_Y} BIG_Y={BIG_Y} SHEET={SHEET_W}x{SHEET_H} PK_Y={PK_Y} HUT_X={HUT_X} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
 
 
 if __name__ == "__main__":

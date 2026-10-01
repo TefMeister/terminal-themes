@@ -270,8 +270,8 @@ float3 drawZombies(float3 col, int2 cell, float2 grid, float T, int tick, float 
         float sc = lerp(ZOMBIE_FAR, ZOMBIE_NEAR, p);
         float feet = horizonY + 1.0 + (grid.y + ZH * ZOMBIE_NEAR * 0.6 - horizonY) * p;
         // a mindless lurch: the body swings to one side and leans into it (side on, it rocks to and fro)
-        float lean = swing * ZOMBIE_LEAN * lerp(0.3, 1.9, hash(fk * 8.2)) * (view == 2 ? 0.4 : 1.0);
-        x += swing * ZOMBIE_SWAY * lerp(0.2, 2.2, hash(fk * 9.4)) * sc * (view == 2 ? 0.2 : 1.0);
+        float lean = swing * ZOMBIE_LEAN * lerp(0.5, 1.4, hash(fk * 8.2)) * (view == 2 ? 0.4 : 1.0);
+        x += swing * ZOMBIE_SWAY * lerp(0.5, 1.4, hash(fk * 9.4)) * sc * (view == 2 ? 0.2 : 1.0);
         float2 at = float2(x - ZW * sc * 0.5, feet - ZH * sc);
         float2 l = float2(float(cell.x) - at.x - lean * (feet - float(cell.y)), float(cell.y) - at.y) / sc;
         if (l.x < 0 || l.y < 0 || l.x >= ZW || l.y >= ZH) continue;
@@ -411,37 +411,6 @@ float3 drawPorchPumpkins(float3 col, int2 cell, float2 grid, float T, int tick, 
     return col;
 }
 
-float3 drawHangers(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
-{
-    float2 c = float2(cell) + 0.5;
-    [loop] for (int k = 0; k < HANGERS; k++)
-    {
-        float fk = (float)k;
-        float f  = loopFreq(1.0 / (HANG_CYCLE * lerp(0.8, 1.2, hash(fk * 3.0))));
-        float ph = frac(T * f + 0.5 * fk + 0.1);
-        float n  = loopIndex(floor(T * f + 0.5 * fk + 0.1), f);
-        float cyc = 1.0 / f;
-        float t  = ph * cyc;
-        float len = grid.y * lerp(0.22, 0.48, hash(n * 2.3 + fk));
-        float l = 0.0;
-        if (t < 3.0)        l = len * (1.0 - pow(1.0 - t / 3.0, 3.0)) * (1.0 + 0.10 * sin(t * 9.0) * (t / 3.0)); // drop, with a bounce
-        else if (t < 12.0)  l = len * (1.0 + 0.04 * sin(t * 4.0) * exp(-(t - 3.0)));
-        else if (t < 16.5)  l = len * (1.0 - (t - 12.0) / 4.5);                                                // climb back up
-        else continue;
-        float swing = 0.30 * sin(t * 1.7 + fk) * exp(-max(t - 3.0, 0.0) * 0.15) * saturate(t / 2.0);
-        float2 anchor = float2(grid.x * (0.12 + 0.76 * hash(n * 5.1 + fk * 11.0)), -1.0);
-        float2 down = float2(sin(swing), cos(swing));
-        float2 body = anchor + down * l;
-        // the thread
-        float2 pa = c - anchor;
-        float h = saturate(dot(pa, down) / max(l, 1.0));
-        if (length(pa - down * h * l) < 0.55 && h < 1.0) col = lerp(col, THREAD_COLOUR * (1.0 + flash), 0.7);
-        float4 s = spriteTurned(cell, body, down, float2(12.0, 1.0), HANG_SCALE, (pmod(tick / 2 + k, 2)) * HW, H_Y, HW, HH);
-        if (s.w > 0) col = s.rgb * (0.9 - flash * 0.6);
-    }
-    return col;
-}
-
 // where spider k on the glass is at time T. Its path is a few slow waves added together, so it always
 // curves gently into each new direction instead of stopping to spin round; it speeds up and slows
 // down as it goes. It only visits now and then: it comes in from beyond the nearest edge, roams, and
@@ -504,27 +473,38 @@ float3 drawPumpkinSpiders(float3 col, int2 cell, float2 grid, float T, int tick,
         float a = frac(p) / f;                                      // seconds into this trip
         int k = (int)(hash(id * 1.9) * 2.99);                      // the three biggest pumpkins
         int row = PK_ROW[k];
-        float2 eye = hash(id * 2.7) < 0.65 ? PK_EYE[row] : PK_EYE_FAR[row];
-        float2 mouth = PK_MOUTH[row];
+        bool nearEye = hash(id * 2.7) < 0.65;
+        float2 eyeMid = nearEye ? PK_EYE[row] : PK_EYE_FAR[row];
+        float2 eye = nearEye ? PK_EYE_EDGE[row] : PK_EYE_FAR_EDGE[row];
+        float2 mouth = PK_MOUTH_EDGE[row];
+        float2 mouthIn = lerp(mouth, PK_MOUTH[row], 0.35);          // a little way in past the edge
+        float2 eyeIn = lerp(eye, eyeMid, 0.35);
         // the path, in sheet pixels of the pumpkin's drawing (face looking left)
         float2 at = 0, dir = float2(0.0, -1.0);
         float size = 1.0;
         float tIn = PKSP_WALK_IN, tSq = tIn + PKSP_SQUEEZE, tOut = tSq + PKSP_INSIDE, tOut2 = tOut + PKSP_SQUEEZE;
+        // in from the ground beside the pumpkin, up its side to the corner of the mouth, and in
+        float2 from = float2(-14.0, 78.0), bend = float2(mouth.x - 16.0, mouth.y + 6.0);
+        float2 up = float2(eye.x + 20.0, eye.y - 26.0), away = float2(112.0, 20.0);
         if (a < tIn)
-            at = bezier(float2(-14.0, 78.0), float2(6.0, 78.0), mouth, smoothstep(0.0, 1.0, a / tIn) * 0.6 + a / tIn * 0.4, dir);
+            at = bezier(from, bend, mouth, smoothstep(0.0, 1.0, a / tIn) * 0.6 + a / tIn * 0.4, dir);
         else if (a < tSq)
         {
-            at = bezier(float2(-14.0, 78.0), float2(6.0, 78.0), mouth, 1.0, dir);
-            size = 1.0 - (a - tIn) / PKSP_SQUEEZE;                  // squeezing in through the mouth
+            float q = (a - tIn) / PKSP_SQUEEZE;
+            at = lerp(mouth, mouthIn, q);
+            dir = normalize(mouthIn - mouth + float2(1e-4, 0.0));
+            size = 1.0 - q;                                          // squeezing in past the edge
         }
         else if (a < tOut) continue;                                // inside the pumpkin
         else if (a < tOut2)
         {
-            at = bezier(eye, float2(eye.x + 25.0, -4.0), float2(112.0, 20.0), 0.0, dir);
-            size = (a - tOut) / PKSP_SQUEEZE;                       // squeezing out of the eye socket
+            float q = (a - tOut) / PKSP_SQUEEZE;
+            at = lerp(eyeIn, eye, q);
+            dir = normalize(eye - eyeIn + float2(1e-4, 0.0));
+            size = q;                                                // climbing out over the rim
         }
         else if (a < tOut2 + PKSP_WALK_OUT)
-            at = bezier(eye, float2(eye.x + 25.0, -4.0), float2(112.0, 20.0), (a - tOut2) / PKSP_WALK_OUT, dir);
+            at = bezier(eye, up, away, (a - tOut2) / PKSP_WALK_OUT, dir);
         else continue;
         // onto the screen: the left group is mirrored so their faces look right
         float2 foot; float sc;

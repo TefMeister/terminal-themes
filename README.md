@@ -54,18 +54,20 @@ gravestones, and a witch's hut on the left with pumpkins on its porch. Potions a
 the window glow drifts from green to purple, pink and teal, and now and then something goes bang in
 quick purple or pink flashes that light up the hut, while the chimney smoke takes the same colour.
 
-Zombies cross a foggy field, each with its own walk: some come straight at you, some at an angle,
-some shuffle sideways across the field, some with arms held out in front and some with arms
-hanging and swinging, legs stepping, each swaying its own way. Candle-lit jack-o'-lanterns stand
+Big gnarled trees stand in the field, mostly bare with a few dark green, yellow and red leaves
+left, black against the night until lightning shows their bark; purple flowers grow round their
+roots and across the grass. Zombies cross the field, passing behind and in front of the trees, each
+with its own walk: some come straight at you, some at an angle, some shuffle sideways across the
+field, some with arms held out in front and some with arms hanging and swinging, with a slight sway. Candle-lit jack-o'-lanterns stand
 among the graves, with two groups of big ones in the bottom corners turned towards the middle. Now and
 then a small spider scurries across the inside of the glass, so you see its underside, curving
-smoothly as it turns; others drop from the top on a thread, and some climb the big pumpkins, squeeze
-into a mouth and come crawling out of an eye socket.
+smoothly as it turns; others let themselves down on a thread from the big trees' branches, and some climb the big
+pumpkins, squeeze in at the corner of a mouth and climb out over the rim of an eye socket.
 
 Every 45 seconds the top of the sky slowly darkens and an old-school sheet ghost appears, its sheet
 streaming in the wind. Each visit is in one of ten places, near or far, big or small, drifting left
-or right: from behind the hut, behind the trees with the gravestones in front of it, or close
-enough to fill half the window. Lightning keeps striking for as long as it stays: three big strikes
+or right: from behind the hut or the big trees, far off behind the gravestones, or close enough to
+fill half the window. Lightning keeps striking for as long as it stays: three big strikes
 first, then more at uneven times, with small bolts flashing far off. Each flash swells, flickers and
 fades, and shows the zombies in full.
 
@@ -130,9 +132,10 @@ the matching numbers at the top of `aquarium.hlsl` too.
 How often the ghost comes, how long it stays, how many zombies there are and the rest sit at the top
 of `halloween.hlsl`. The pumpkins, zombies, witch, spiders, trees and gravestones are drawn in code by
 `styles/halloween/halloween-sprites.py` (needs Pillow; the walking zombies are posed as little 3D
-figures in `halloween-zombies.py`, next to it), which rewrites `halloween-sheet.png`. The
-ghost, the lightning and the smoke are drawn by the shader itself. The shader is split in two:
-`halloween-cast.hlsli` must stay next to `halloween.hlsl` if you copy them somewhere else.
+figures in `halloween-zombies.py` and the big trees grown in `halloween-trees.py`, both next to it),
+which rewrites `halloween-sheet.png`. The ghost, the lightning, the smoke and the flowers are drawn by
+the shader itself. The shader is split in three: `halloween-cast.hlsli` and `halloween-trees.hlsli`
+must stay next to `halloween.hlsl` if you copy them somewhere else.
 
 ## Tuning
 

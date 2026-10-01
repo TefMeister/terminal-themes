@@ -29,7 +29,7 @@ static const float  SCENE_BRIGHT   = 0.62;   // overall picture brightness (text
 static const float  EDGE_FADE      = 0.09;   // share of each side over which the picture fades to black
 
 // --- sprite sheet layout (matches halloween-sprites.py) ---
-static const int    SHEET_W = 384, SHEET_H = 1078;
+static const int    SHEET_W = 384, SHEET_H = 1278;
 static const int    PKW = 48, PKH = 40, PK_Y = 0;     // pumpkins: 3 kinds (rows) x 4 candle-flame frames
 static const int    HUTW = 128, HUTH = 120, HUT_X = 192;  // the witch's hut
 static const int    ZW = 32, ZH = 44, Z_Y = 120;      // zombies: 12 rows x 8 walk frames, row = (view * 2 + arms) * 2 + outfit
@@ -39,6 +39,10 @@ static const int    HW = 24, HH = 24, H_Y = 712;      // hanging spider: 2 frame
 static const int    TW = 64, TH = 80, T_Y = 736;      // dead trees: 2 kinds
 static const int    GW = 16, GH = 22, G_Y = 816;      // gravestones: 4 kinds
 static const int    BPW = 96, BPH = 80, BIG_Y = 838;  // big turned pumpkins: 3 rows x 4 flame frames, drawn twice as fine
+static const int    BTW = 160, BTH = 200, BT_Y = 1078; // big trees: 2 kinds
+// branch points spiders hang from, 4 per big tree drawing (sheet pixels; printed by halloween-sprites.py)
+static const float2 BT_ANCHOR[8]   = { float2(75.3, 168.7), float2(46.5, 151.4), float2(111.5, 145.6), float2(130.9, 99.5),
+                                       float2(68.2, 131.5), float2(112.8, 167.6), float2(48.3, 164.5), float2(88.5, 172.2) };
 
 // --- sky ---
 static const float3 SKY_TOP        = float3(0.035, 0.015, 0.075);
@@ -85,14 +89,34 @@ static const float3 GROUND_NEAR    = float3(0.030, 0.026, 0.024);
 static const float3 FOG_COLOUR     = float3(0.170, 0.130, 0.210);
 static const float  FOG_AMOUNT     = 0.85;
 
+// --- big trees standing in the field, between you and the hut ---
+// listed by depth; zombies, the ghost and the hut pass behind or in front of each one
+static const int    FG_TREES       = 3;
+static const float  FT_X[3]        = { 0.45, 0.71, 0.27 };   // trunk, across the width
+static const float  FT_DEPTH[3]    = { 0.16, 0.36, 0.55 };   // where it stands in the field (0 horizon, 1 bottom)
+static const float  FT_HEIGHT[3]   = { 0.62, 0.82, 1.02 };   // drawing height, as a share of the window
+static const int    FT_KIND[3]     = { 0, 1, 0 };
+static const int    FT_MIRROR[3]   = { 0, 0, 1 };
+static const float  TREE_HAZE      = 0.35;   // further trees melt a little into the fog
+static const float  TREE_BARK      = 1.0;    // how much bark a lightning flash shows
+static const float  LEAF_AMBIENT   = 0.35;   // the few leaves keep a little colour in the dark
+
+// --- purple flowers in the grass ---
+static const int    FLOWER_PATCHES = 18;     // the first ones grow round the big trees and the hut
+static const float3 FLOWER_DEEP    = float3(0.45, 0.16, 0.62);
+static const float3 FLOWER_LIGHT   = float3(0.78, 0.40, 0.95);
+static const float3 FLOWER_EYE     = float3(0.95, 0.85, 0.35);
+static const float3 STEM_COLOUR    = float3(0.10, 0.22, 0.08);
+static const float  FLOWER_AMBIENT = 0.45;   // how much of their colour shows in the dark
+
 // --- zombies ---
 static const int    ZOMBIES        = 14;
 static const float  ZOMBIE_TRIP    = 190.0;  // typical seconds to shuffle from the horizon to you
 static const float  ZOMBIE_FAR     = 0.22;   // size on the horizon
 static const float  ZOMBIE_NEAR    = 3.2;    // size when they reach the front
 static const float  ZOMBIE_LURCH   = 0.60;   // lurches per second (one step to each side), varies per zombie
-static const float  ZOMBIE_LEAN    = 0.20;   // how far the body leans into each lurch
-static const float  ZOMBIE_SWAY    = 3.0;    // how far, in sprite pixels, the body swings side to side
+static const float  ZOMBIE_LEAN    = 0.07;   // how far the body leans into each lurch (subtle)
+static const float  ZOMBIE_SWAY    = 1.0;    // how far, in sprite pixels, the body swings side to side
 static const float  ZOMBIE_HAZE    = 0.30;   // far zombies melt a little into the fog
 static const float  ZOMBIE_AMBIENT = 0.10;   // moonlight on them between flashes, so they read as solid
 static const int    ZOMBIE_FRAMES  = 8;      // drawings per stride (two steps)
@@ -187,12 +211,16 @@ static const float  PKSP_WALK_IN   = 5.0;    // seconds to climb to the mouth
 static const float  PKSP_SQUEEZE   = 0.6;    // seconds to squeeze in (or out)
 static const float  PKSP_INSIDE    = 2.8;    // seconds spent inside the pumpkin
 static const float  PKSP_WALK_OUT  = 4.0;    // seconds to crawl from the eye over the top and away
-// where the holes are in the big turned pumpkins (sheet pixels, face looking left, one per drawing)
+// where the holes are in the big turned pumpkins (sheet pixels, face looking left, one per drawing):
+// the middle of each, and the edge a spider uses (the mouth's side corner, the eyes' upper outer rim)
 static const float2 PK_MOUTH[3]    = { float2(27.9, 59.5), float2(29.7, 55.1), float2(25.4, 60.3) };
 static const float2 PK_EYE[3]      = { float2(33.9, 37.5), float2(38.7, 30.2), float2(28.3, 37.2) };
 static const float2 PK_EYE_FAR[3]  = { float2(6.7, 39.1),  float2(14.4, 32.9), float2(5.1, 39.3) };
-static const int    HANGERS        = 2;
-static const float  HANG_SCALE     = 1.6;
+static const float2 PK_MOUTH_EDGE[3]   = { float2(7.5, 57.5),  float2(11.5, 50.5), float2(4.5, 56.5) };
+static const float2 PK_EYE_EDGE[3]     = { float2(49.5, 29.5), float2(53.5, 22.5), float2(44.5, 33.5) };
+static const float2 PK_EYE_FAR_EDGE[3] = { float2(8.5, 35.5),  float2(14.5, 26.5), float2(8.5, 32.5) };
+static const int    HANGERS        = 3;      // spiders dropping from the big trees' branches
+static const float  HANG_SCALE     = 0.45;   // spider size, relative to its tree's
 static const float  HANG_CYCLE     = 26.0;   // seconds between drops of the same spider
 static const float3 THREAD_COLOUR  = float3(0.40, 0.40, 0.46);
 
@@ -384,6 +412,9 @@ float2 bolts(float2 c, float t, float n, float s1, float2 grid, float horizonY, 
 // the ghost and everyone else in the picture
 #include "halloween-cast.hlsli"
 
+// the big trees, the flowers and the spiders that hang from the branches
+#include "halloween-trees.hlsli"
+
 // ---------------------------------------------------------------- the whole picture
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
@@ -483,6 +514,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         if (rows < 0.12) g *= 0.75;
         col = g * (1.0 + flash * 2.2 * (1.0 - d * 0.6));
         [branch] if (sprites) col = pumpkinPools(col, cell, grid, T, dth);
+        col = drawFlowers(col, cell, grid, horizonY, flash);
     }
     // --- ground fog drifting across, thick at the horizon and thinning towards you ---
     float fy = (c.y - (horizonY - 10.0)) / max(grid.y - horizonY, 1.0);
@@ -497,16 +529,41 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     [branch] if (sprites)
     {
+        // everything standing in the field, drawn back to front by where it meets the ground:
+        // 0 the hut, 1 the ghost, 2 the nearest zombie here, 3.. the big trees (with their spiders)
         float zFeet;
-        col = drawZombies(col, cell, grid, T, tick, flash, horizonY, zFeet);
-        bool zombieFront = zFeet > gBase;
-        if (gDepth >= 0.0 && gDepth <= HUT_DEPTH && !zombieFront)          // behind the hut
-            col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
-        col = drawHut(col, cell, grid, T, flash, fog, horizonY, zFeet, dth);
-        col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
-        col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
-        if (gDepth > HUT_DEPTH && !zombieFront)                            // in front of the hut
-            col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
+        float3 zCol = drawZombies(col, cell, grid, T, tick, flash, horizonY, zFeet);
+        float2 hAt; float hSc, hBase;
+        hutPlace(grid, horizonY, hAt, hSc, hBase);
+        float lastBase = -1e9;
+        int lastId = -1;
+        [loop] for (int step = 0; step < 3 + FG_TREES; step++)
+        {
+            int id = -1;
+            float base = 1e9;
+            [loop] for (int i = 0; i < 3 + FG_TREES; i++)
+            {
+                float b = i == 0 ? hBase : (i == 1 ? (gDepth >= 0.0 && ghostA > 0.0 ? gBase : -2e9)
+                        : (i == 2 ? (zFeet >= 0.0 ? zFeet : -2e9) : treeBase(max(i - 3, 0), grid, horizonY)));
+                bool later = b > lastBase || (b == lastBase && i > lastId);
+                if (b > -1e9 && later && (b < base || (b == base && i < id))) { base = b; id = i; }
+            }
+            if (id < 0) break;
+            lastBase = base; lastId = id;
+            if (id == 0)
+            {
+                col = drawHut(col, cell, grid, T, flash, fog, horizonY, -1.0, dth);
+                col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
+                col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
+            }
+            else if (id == 1) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
+            else if (id == 2) col = zCol;
+            else
+            {
+                col = drawBigTree(col, cell, grid, horizonY, id - 3, flash);
+                col = drawTreeHangers(col, cell, grid, T, tick, flash, horizonY, id - 3);
+            }
+        }
     }
     else if (gDepth >= 0.0) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
 
@@ -517,7 +574,6 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     {
         col = drawPumpkins(col, cell, grid, T, tick, flash);
         col = drawPumpkinSpiders(col, cell, grid, T, tick, flash);
-        col = drawHangers(col, cell, grid, T, tick, flash);
         col = drawCrawlers(col, cell, grid, T, tick, flash);
     }
 
