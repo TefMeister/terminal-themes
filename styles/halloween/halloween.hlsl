@@ -171,10 +171,26 @@ static const int    WITCHES        = 4;
 static const float  WITCH_TRIP     = 22.0;   // typical seconds to cross the sky
 
 // --- spiders ---
-static const int    CRAWLERS       = 3;
+static const int    CRAWLERS       = 2;
 static const float  CRAWL_SCALE    = 0.9;    // on the glass, but small and quick
 static const float  CRAWL_SPEED    = 0.28;   // how quickly they wander (radians of their curvy path per second)
-static const float  CRAWL_ROAM     = 0.62;   // how far from the middle they roam (past the edges, so they come and go)
+static const float  CRAWL_ROAM     = 0.62;   // how far from the middle they roam
+static const float  CRAWL_CYCLE    = 50.0;   // each one only turns up now and then: once in this many seconds...
+static const float  CRAWL_VISIT    = 14.0;   // ...for this long, scuttling in from beyond the edge and out again
+static const float  CRAWL_ENTER    = 2.5;    // seconds it takes to come in from (or go back out past) the edge
+// small spiders on the big pumpkins in the bottom corners: one climbs up into a mouth, and a little
+// later comes crawling out of an eye socket and away over the top
+static const int    PK_SPIDERS     = 2;
+static const float  PKSP_CYCLE     = 22.0;   // seconds between one spider's trips
+static const float  PKSP_SCALE     = 0.30;   // spider size, relative to its pumpkin's
+static const float  PKSP_WALK_IN   = 5.0;    // seconds to climb to the mouth
+static const float  PKSP_SQUEEZE   = 0.6;    // seconds to squeeze in (or out)
+static const float  PKSP_INSIDE    = 2.8;    // seconds spent inside the pumpkin
+static const float  PKSP_WALK_OUT  = 4.0;    // seconds to crawl from the eye over the top and away
+// where the holes are in the big turned pumpkins (sheet pixels, face looking left, one per drawing)
+static const float2 PK_MOUTH[3]    = { float2(27.9, 59.5), float2(29.7, 55.1), float2(25.4, 60.3) };
+static const float2 PK_EYE[3]      = { float2(33.9, 37.5), float2(38.7, 30.2), float2(28.3, 37.2) };
+static const float2 PK_EYE_FAR[3]  = { float2(6.7, 39.1),  float2(14.4, 32.9), float2(5.1, 39.3) };
 static const int    HANGERS        = 2;
 static const float  HANG_SCALE     = 1.6;
 static const float  HANG_CYCLE     = 26.0;   // seconds between drops of the same spider
@@ -500,6 +516,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     [branch] if (sprites)
     {
         col = drawPumpkins(col, cell, grid, T, tick, flash);
+        col = drawPumpkinSpiders(col, cell, grid, T, tick, flash);
         col = drawHangers(col, cell, grid, T, tick, flash);
         col = drawCrawlers(col, cell, grid, T, tick, flash);
     }

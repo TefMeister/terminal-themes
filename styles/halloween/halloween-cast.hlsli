@@ -391,7 +391,7 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float across = abs(c.x - mid) / halfw;
     if (across > 1.3) return col;
     float lumps = noise2(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * loopRate(SMOKE_RISE * TAU) / TAU * 8.0));
-    float dens = (1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3;
+    float dens = ((1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3) * (1.0 - smoothstep(0.55, 1.0, h));
     if (dens < 0.15 || dth > dens * 1.6) return col;
     float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, saturate(tint.a * 1.5));
     return lerp(col, smoke * (1.0 + flash * 2.0) * (1.0 - h * 0.4), 0.85);
@@ -442,31 +442,40 @@ float3 drawHangers(float3 col, int2 cell, float2 grid, float T, int tick, float 
     return col;
 }
 
-// a spider scuttling about on the inside of the glass. Its path is a few slow waves added together,
-// so it always curves gently into each new direction instead of stopping to spin round; it speeds up
-// and slows down as it goes, and wanders past the edges now and then, so spiders come and go.
+// where spider k on the glass is at time T. Its path is a few slow waves added together, so it always
+// curves gently into each new direction instead of stopping to spin round; it speeds up and slows
+// down as it goes. It only visits now and then: it comes in from beyond the nearest edge, roams, and
+// heads back out. `on` is false while it is away.
+float2 crawlerPos(int k, float T, float2 grid, out bool on)
+{
+    float fk = (float)k;
+    float wv = loopRate(0.36);
+    float t  = T + 2.0 * sin(T * wv + fk * 2.0);                  // 2 s * 0.36 < 1, so it never runs backwards
+    float2 pos = 0.5;
+    [unroll] for (int i = 0; i < 3; i++)
+    {
+        float fi = (float)i;
+        float2 rate = CRAWL_SPEED * float2(1.0 + 0.9 * fi + 0.3 * hash(fk * 3.1 + fi), 0.8 + 1.1 * fi + 0.3 * hash(fk * 4.7 + fi));
+        rate = float2(loopRate(rate.x), loopRate(rate.y));
+        float2 ph = float2(hash(fk * 5.9 + fi), hash(fk * 6.7 + fi)) * TAU;
+        pos += CRAWL_ROAM * float2(0.55, 0.45) / (1.0 + fi * 0.8) * sin(rate * t + ph);
+    }
+    float f = loopFreq(1.0 / CRAWL_CYCLE);
+    float a = frac(T * f + 0.5 * fk) / f;                          // seconds into its own cycle
+    on = a < CRAWL_VISIT;
+    float away = 1.0 - smoothstep(0.0, CRAWL_ENTER, a) + smoothstep(CRAWL_VISIT - CRAWL_ENTER, CRAWL_VISIT, a);
+    float2 outward = normalize(pos - 0.5 + float2(1e-3, 0.0));
+    return (pos + outward * away * 0.9) * grid;
+}
+
 float3 drawCrawlers(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
 {
     [loop] for (int k = 0; k < CRAWLERS; k++)
     {
-        float fk = (float)k;
-        // its own clock runs faster and slower (it never runs backwards: the wobble is gentler than 1)
-        float wv = loopRate(0.36);
-        float t  = T + 2.0 * sin(T * wv + fk * 2.0);                  // 2 s * 0.36 < 1, so it only ever slows
-        float dt = 1.0 + 2.0 * wv * cos(T * wv + fk * 2.0);
-        float2 pos = 0.5, vel = 0;
-        [unroll] for (int i = 0; i < 3; i++)
-        {
-            float fi = (float)i;
-            float2 rate = CRAWL_SPEED * float2(1.0 + 0.9 * fi + 0.3 * hash(fk * 3.1 + fi), 0.8 + 1.1 * fi + 0.3 * hash(fk * 4.7 + fi));
-            rate = float2(loopRate(rate.x), loopRate(rate.y));
-            float2 ph = float2(hash(fk * 5.9 + fi), hash(fk * 6.7 + fi)) * TAU;
-            float2 amp = CRAWL_ROAM * float2(0.55, 0.45) / (1.0 + fi * 0.8);
-            pos += amp * sin(rate * t + ph);
-            vel += amp * rate * cos(rate * t + ph) * dt;
-        }
-        pos *= grid;
-        float2 dir = normalize(vel * grid + 1e-4);
+        bool on, was;
+        float2 pos = crawlerPos(k, T, grid, on);
+        if (!on) continue;
+        float2 dir = normalize(pos - crawlerPos(k, T - 0.1, grid, was) + float2(0.0, -1e-4));
         int frame = pmod(tick * 2 + k, 4);                         // quick little legs
         float4 s = spriteTurned(cell, pos, -dir, float2(20.0, 22.0), CRAWL_SCALE, frame * SW, S_Y, SW, SH);
         // lit from behind by the scene, so mostly dark; a flash turns it into a black shape
@@ -475,3 +484,61 @@ float3 drawCrawlers(float3 col, int2 cell, float2 grid, float T, int tick, float
     return col;
 }
 
+// a point along a curve from a through b (pulled towards, not passing) to c, and which way it heads
+float2 bezier(float2 a, float2 b, float2 c, float u, out float2 dir)
+{
+    dir = normalize(lerp(b - a, c - b, u) + float2(1e-4, 0.0));
+    return lerp(lerp(a, b, u), lerp(b, c, u), u);
+}
+
+// small spiders on the big corner pumpkins: up from the ground into a mouth, a little while inside,
+// then out of an eye socket and away over the top
+float3 drawPumpkinSpiders(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
+{
+    [loop] for (int j = 0; j < PK_SPIDERS; j++)
+    {
+        float fj = (float)j;
+        float f = loopFreq(1.0 / PKSP_CYCLE);
+        float p = T * f + 0.5 * fj;
+        float id = loopIndex(floor(p), f) + fj * 31.0;
+        float a = frac(p) / f;                                      // seconds into this trip
+        int k = (int)(hash(id * 1.9) * 2.99);                      // the three biggest pumpkins
+        int row = PK_ROW[k];
+        float2 eye = hash(id * 2.7) < 0.65 ? PK_EYE[row] : PK_EYE_FAR[row];
+        float2 mouth = PK_MOUTH[row];
+        // the path, in sheet pixels of the pumpkin's drawing (face looking left)
+        float2 at = 0, dir = float2(0.0, -1.0);
+        float size = 1.0;
+        float tIn = PKSP_WALK_IN, tSq = tIn + PKSP_SQUEEZE, tOut = tSq + PKSP_INSIDE, tOut2 = tOut + PKSP_SQUEEZE;
+        if (a < tIn)
+            at = bezier(float2(-14.0, 78.0), float2(6.0, 78.0), mouth, smoothstep(0.0, 1.0, a / tIn) * 0.6 + a / tIn * 0.4, dir);
+        else if (a < tSq)
+        {
+            at = bezier(float2(-14.0, 78.0), float2(6.0, 78.0), mouth, 1.0, dir);
+            size = 1.0 - (a - tIn) / PKSP_SQUEEZE;                  // squeezing in through the mouth
+        }
+        else if (a < tOut) continue;                                // inside the pumpkin
+        else if (a < tOut2)
+        {
+            at = bezier(eye, float2(eye.x + 25.0, -4.0), float2(112.0, 20.0), 0.0, dir);
+            size = (a - tOut) / PKSP_SQUEEZE;                       // squeezing out of the eye socket
+        }
+        else if (a < tOut2 + PKSP_WALK_OUT)
+            at = bezier(eye, float2(eye.x + 25.0, -4.0), float2(112.0, 20.0), (a - tOut2) / PKSP_WALK_OUT, dir);
+        else continue;
+        // onto the screen: the left group is mirrored so their faces look right
+        float2 foot; float sc;
+        pumpkinPlace(k, grid, foot, sc);
+        bool mirror = PK_SIDE[k] < 0;
+        if (mirror) { at.x = BPW - at.x; dir.x = -dir.x; }
+        float2 screen = foot - float2(BPW * sc * 0.5, BPH * sc) + at * sc;
+        float s = sc * PKSP_SCALE * size;
+        if (s < 0.05) continue;
+        bool moving = size >= 1.0;
+        int frame = moving ? pmod(tick * 2 + j, 4) : pmod(tick / 2 + j, 4);
+        float4 t = spriteTurned(cell, screen, -dir, float2(20.0, 22.0), s, frame * SW, S_Y, SW, SH);
+        // dark against the candle glow, its edge caught by the light from the holes
+        if (t.w > 0) col = t.rgb * (0.55 + flash * 0.4) + CANDLE_DEEP * 0.06 * candle(k, T);
+    }
+    return col;
+}
