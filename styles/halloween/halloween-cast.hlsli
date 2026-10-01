@@ -334,7 +334,7 @@ float4 burstAt(float t, bool smoke)
         float3 c = hash(id * 3.7) < 0.5 ? BURST_PURPLE : BURST_PINK;
         float e;
         if (smoke)
-            e = a < BURST_SMOKE ? 1.0 - a / BURST_SMOKE : 0.0;
+            e = smoothstep(0.0, BURST_SMOKE * 0.4, a) * (1.0 - smoothstep(BURST_SMOKE * 0.4, BURST_SMOKE, a));   // fades in and out of the grey
         else
         {
             // three quick pops, each a sharp flash that dies away, the middle one strongest
@@ -393,7 +393,7 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float lumps = noise2(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * loopRate(SMOKE_RISE * TAU) / TAU * 8.0));
     float dens = ((1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3) * (1.0 - smoothstep(0.55, 1.0, h));
     if (dens < 0.15 || dth > dens * 1.6) return col;
-    float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, saturate(tint.a * 1.5));
+    float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, steps(saturate(tint.a * 1.3), 4.0, dth));
     return lerp(col, smoke * (1.0 + flash * 2.0) * (1.0 - h * 0.4), 0.85);
 }
 
