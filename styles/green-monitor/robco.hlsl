@@ -55,6 +55,14 @@ float3 recolour(float2 uv)
     return c;
 }
 
+// the background fades to black at every edge of the window; the letters do not
+static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
+float screenFade(float2 tex)
+{
+    float2 e = min(tex, 1.0 - tex) / float2(SCREEN_FADE * Resolution.y / Resolution.x, SCREEN_FADE);
+    return smoothstep(0.0, 1.0, saturate(min(e.x, e.y)));
+}
+
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 {
     float3 color = recolour(tex);
@@ -73,14 +81,14 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     color += glow / 8.0 * GLOW_STRENGTH;
 
     // green glass and the lighter band
-    color += GLASS_TINT;
+    color += GLASS_TINT * screenFade(tex);
     float band = exp(-pow((tex.x - BAND_X) / BAND_WIDTH, 2.0));
-    color += float3(0.35, 1.0, 0.55) * band * BAND_STRENGTH;
+    color += float3(0.35, 1.0, 0.55) * band * BAND_STRENGTH * screenFade(tex);
 
     // rolling bar, like an old monitor slowly out of sync
     float rollY = frac(Time / ROLL_SECONDS) * 1.4 - 0.2;
     float roll  = exp(-pow((tex.y - rollY) / ROLL_HEIGHT, 2.0));
-    color += float3(0.35, 1.0, 0.55) * roll * ROLL_STRENGTH;
+    color += float3(0.35, 1.0, 0.55) * roll * ROLL_STRENGTH * screenFade(tex);
 
     // dark corners
     float2 d = tex - 0.5;

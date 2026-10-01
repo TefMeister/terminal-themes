@@ -92,8 +92,17 @@ float2 picture(float4 pos)
     float3 p = image.Sample(samplerState, (cell + inner) / float2(SHEET_COLS, SHEET_ROWS)).rgb;
     float  l = dot(p, float3(0.299, 0.587, 0.114));
     l = saturate(pow(l, PIC_CONTRAST) * 1.25);
-    float fade = smoothstep(0, PIC_EDGE_FADE, uv.x) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.x);
+    float fade = smoothstep(0, PIC_EDGE_FADE, uv.x) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.x)
+               * smoothstep(0, PIC_EDGE_FADE, uv.y) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.y);
     return float2(l, fade);
+}
+
+// the background fades to black at every edge of the window; the letters do not
+static const float  SCREEN_FADE   = 0.09;   // share of the height over which the edges fade to black
+float screenFade(float2 tex)
+{
+    float2 e = min(tex, 1.0 - tex) / float2(SCREEN_FADE * Resolution.y / Resolution.x, SCREEN_FADE);
+    return smoothstep(0.0, 1.0, saturate(min(e.x, e.y)));
 }
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
@@ -120,7 +129,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float  rollY = frac(Time / ROLL_SECONDS) * 1.4 - 0.2;
     float  roll  = exp(-pow((tex.y - rollY) / ROLL_HEIGHT, 2.0));
     float  bright = pic.x * pic.y * strip * (PIC_STRENGTH + roll * ROLL_STRENGTH);
-    float3 back  = GLASS_TINT + PIC_GREEN * bright;
+    float3 back  = (GLASS_TINT + PIC_GREEN * bright) * screenFade(tex);
 
     // letters sit on top; the picture fades out underneath them so they stay readable
     float3 color = text + back * (1.0 - ink(text));

@@ -1,7 +1,8 @@
 """Draws the Halloween pixel-art sprite sheet (halloween-sheet.png) for halloween.hlsl.
 
 Layout (must match the constants in halloween.hlsl; the script prints them):
-  pumpkins      3 kinds,              PKW x PKH, one row
+  pumpkins      3 kinds x 4 frames,   PKW x PKH, one row per kind (the frames are the candle flame)
+  hut           1,                    HUTW x HUTH, to the right of the pumpkins
   zombies       2 kinds x 4 frames,   ZW x ZH, one row per kind (front view, walking towards you)
   witch         4 frames,             WW x WH (a silhouette mask, facing right)
   spider        4 frames,             SW x SH (seen from underneath, crawling on the glass, facing up)
@@ -9,8 +10,10 @@ Layout (must match the constants in halloween.hlsl; the script prints them):
   trees         2 kinds,              TW x TH (silhouette masks)
   tombstones    4 kinds,              GW x GH
 Magenta (255, 0, 255) means "nothing here". Pure black is never used in the art.
-Pumpkin face holes are written with blue = 7 exactly: the shader treats those pixels as candle
-light (their green value is the brightness) and makes them flicker.
+Light codes, read by the shader (red is 255 or close to it, blue is the code):
+  blue 7  candle light seen through a pumpkin's holes; green is the brightness. Flickers.
+  blue 8  lit by the candle but keeps its own colour (wax, cut flesh). Flickers with it.
+  blue 9  the hut's window light; green is the brightness.
 Run:  python halloween-sprites.py
 """
 import math
@@ -27,15 +30,17 @@ SW, SH = 40, 40
 HW, HH = 24, 24
 TW, TH = 64, 80
 GW, GH = 16, 22
+HUTW, HUTH = 128, 120
 
 PK_Y = 0
-Z_Y = PK_Y + PKH
+HUT_X = 4 * PKW
+Z_Y = max(PK_Y + 3 * PKH, HUTH)
 W_Y = Z_Y + 2 * ZH
 S_Y = W_Y + WH
 H_Y = S_Y + SH
 T_Y = H_Y + HH
 G_Y = T_Y + TH
-SHEET_W = 256
+SHEET_W = HUT_X + HUTW
 SHEET_H = G_Y + GH
 
 
@@ -115,55 +120,29 @@ def inside(pts, x, y):
 
 # ---------------------------------------------------------------- pumpkins
 
-ORANGE = (226, 104, 18)
-ORANGE_DARK = (120, 42, 8)
-ORANGE_LIGHT = (255, 158, 52)
+ORANGE = (232, 110, 20)
+ORANGE_DARK = (64, 20, 6)
+ORANGE_LIGHT = (255, 178, 74)
+SPILL = (255, 150, 40)
+FLESH = (250, 204, 8)          # cut flesh: blue 8 = lit by the candle, keeps its own colour
+WAX = (236, 222, 8)
 STEM = (78, 86, 34)
+FLAME_SWAY = [0.0, 0.8, 0.2, -0.7]
 
 
 def glow(g):
-    """A candle-lit hole pixel: blue = 7 marks it, green carries the brightness."""
+    """Candle light seen through a hole: blue = 7 marks it, green carries the brightness."""
     return (255, clamp(g), 7)
 
 
-def draw_pumpkin(kind):
-    c = Cell(PKW, PKH)
-    cx = PKW / 2
-    ry = [15.5, 17.5, 15.0][kind]
-    rx = [22.0, 19.0, 23.0][kind]
-    cy = PKH - ry - 1.5
-    ribs = [6, 5, 7][kind]
-    for y in range(PKH):
-        for x in range(PKW):
-            u = (x + 0.5 - cx) / rx
-            v = (y + 0.5 - cy) / ry
-            # flattened top and bottom, a slight dip where the stem goes in
-            d = u * u + v * v * (1.0 + 0.25 * max(0.0, -v) * (1.0 - abs(u)))
-            if d > 1.0:
-                continue
-            a = math.asin(max(-1.0, min(1.0, u / max(math.sqrt(max(1e-6, 1 - v * v * 0.9)), 1e-3))))
-            rib = math.cos(a * ribs) * 0.5 + 0.5          # 1 on a rib's bulge, 0 in a groove
-            light = 0.55 + 0.45 * (1.0 - abs(u)) - 0.25 * max(0.0, v)
-            col = mix(ORANGE_DARK, ORANGE, light * (0.45 + 0.55 * rib))
-            if rib > 0.85 and v < -0.2 and abs(u) < 0.6:
-                col = mix(col, ORANGE_LIGHT, 0.6)
-            c.put(x, y, col)
-    c.outline(lambda col: shade(col, 0.55))
-    # stem
-    sx = cx - 1 + kind
-    top = cy - ry
-    for i in range(7):
-        bend = (i / 6.0) ** 2 * (3 if kind != 1 else -3)
-        for w in range(3 if i < 4 else 2):
-            c.put(sx + bend + w, top + 1 - i, mix(STEM, (40, 44, 18), w / 2))
-
+def pumpkin_face(kind, cx, cy, ry):
     face = []
     ey = cy - ry * 0.25
     if kind == 0:
         # slanted, angry triangle eyes and a wide jagged grin
         face.append([(cx - 15, ey - 5), (cx - 3, ey + 1), (cx - 13, ey + 4)])
         face.append([(cx + 15, ey - 5), (cx + 3, ey + 1), (cx + 13, ey + 4)])
-        face.append([(cx - 1.5, ey + 4), (cx + 1.5, ey + 4), (cx, ey + 7)])
+        face.append([(cx - 2, ey + 4), (cx + 2, ey + 4), (cx, ey + 8)])
         my = cy + ry * 0.35
         face.append([(cx - 16, my - 4), (cx - 11, my), (cx - 8, my - 2), (cx - 5, my + 1), (cx - 2, my - 1),
                      (cx + 2, my + 1), (cx + 5, my - 1), (cx + 8, my + 1), (cx + 11, my - 1), (cx + 16, my - 4),
@@ -173,43 +152,250 @@ def draw_pumpkin(kind):
         # narrow, sharply slanted slits for eyes; a grin with two fangs
         face.append([(cx - 13, ey - 6), (cx - 2, ey + 1), (cx - 4, ey + 3), (cx - 13, ey - 1)])
         face.append([(cx + 13, ey - 6), (cx + 2, ey + 1), (cx + 4, ey + 3), (cx + 13, ey - 1)])
+        face.append([(cx - 2, ey + 4), (cx + 2, ey + 4), (cx, ey + 7)])
         my = cy + ry * 0.30
         face.append([(cx - 13, my - 3), (cx - 7, my), (cx + 7, my), (cx + 13, my - 3), (cx + 9, my + 4),
                      (cx + 5, my + 6), (cx + 3, my + 2), (cx - 3, my + 2), (cx - 5, my + 6), (cx - 9, my + 4)])
     else:
-        # crescent-cut evil eyes with a little pupil left in, small triangle nose, stitched grin
+        # crescent-cut evil eyes, small triangle nose, a grin with teeth left standing
         face.append([(cx - 16, ey - 3), (cx - 10, ey - 6), (cx - 3, ey - 1), (cx - 6, ey + 4), (cx - 13, ey + 3)])
         face.append([(cx + 16, ey - 3), (cx + 10, ey - 6), (cx + 3, ey - 1), (cx + 6, ey + 4), (cx + 13, ey + 3)])
         face.append([(cx - 2, ey + 5), (cx + 2, ey + 5), (cx, ey + 8)])
         my = cy + ry * 0.38
         face.append([(cx - 18, my - 5), (cx - 9, my - 1), (cx + 9, my - 1), (cx + 18, my - 5), (cx + 13, my + 3),
                      (cx + 4, my + 6), (cx - 4, my + 6), (cx - 13, my + 3)])
+    return face, ey
 
-    holes = {}
+
+def draw_pumpkin(kind, frame):
+    """A round, ribbed jack-o'-lantern lit by a candle inside. frame = the flame's shape."""
+    c = Cell(PKW, PKH)
+    cx = PKW / 2
+    ry = [15.5, 17.5, 15.0][kind]
+    rx = [22.0, 19.0, 23.0][kind]
+    cy = PKH - ry - 1.5
+    ribs = [6, 5, 7][kind]
+    lx, ly, lz = 0.45, -0.55, 0.70                       # moonlight from the upper right, towards us
+    for y in range(PKH):
+        for x in range(PKW):
+            u = (x + 0.5 - cx) / rx
+            v = (y + 0.5 - cy) / ry
+            d = u * u + v * v * (1.0 + 0.25 * max(0.0, -v) * (1.0 - abs(u)))
+            if d > 1.0:
+                continue
+            nz = math.sqrt(max(0.0, 1.0 - d))
+            # each rib is its own bulge: tilt the surface across it
+            a = math.atan2(u, max(nz, 0.05))
+            rib_phase = a * ribs / 1.0
+            bulge = math.cos(rib_phase)
+            tilt = -math.sin(rib_phase) * 0.45
+            nx, ny = u + tilt, v
+            n = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+            diff = max(0.0, (nx * lx + ny * ly + nz * lz) / n)
+            groove = bulge < -0.75
+            k = 0.18 + 0.82 * diff
+            k *= 0.55 + 0.45 * (bulge * 0.5 + 0.5)
+            k *= 0.45 + 0.55 * math.sqrt(nz)             # dark towards the outline: it reads as round
+            if v > 0.55:
+                k *= 1.0 - (v - 0.55) * 0.9              # its own shadow underneath
+            col = mix(ORANGE_DARK, ORANGE, k * 1.15)
+            if groove:
+                col = shade(col, 0.6)
+            if diff > 0.82 and bulge > 0.6 and v < 0.1:
+                col = mix(col, ORANGE_LIGHT, (diff - 0.82) * 4.0)   # shine on the rib tops
+            c.put(x, y, col)
+    c.outline(lambda col: shade(col, 0.6))
+    # stem, lit on its right
+    sx = cx - 1 + kind
+    top = cy - ry
+    for i in range(7):
+        bend = (i / 6.0) ** 2 * (3 if kind != 1 else -3)
+        for w in range(3 if i < 4 else 2):
+            c.put(sx + bend + w, top + 1 - i, mix((44, 48, 18), STEM, w / 2))
+
+    face, ey = pumpkin_face(kind, cx, cy, ry)
+    holes = set()
     for pts in face:
         for y in range(PKH):
             for x in range(PKW):
                 if c.get(x, y) is not None and inside(pts, x + 0.5, y + 0.5):
-                    holes[(x, y)] = True
+                    holes.add((x, y))
+
+    # the candle stands on the bottom inside; we see it, and its flame, only through the holes
+    wick_y = cy + ry * 0.28
+    base_y = cy + ry * 0.80
+    fx = cx + FLAME_SWAY[frame]
+    flame_h = [6.5, 7.5, 6.0, 7.0][frame]
     for (x, y) in holes:
-        # brightest in the middle of each hole, dimmer near its cut edge; the cut flesh below and on
-        # the side away from us shows as a thin pale-yellow rim
-        near = sum((x + dx, y + dy) not in holes for dx in (-1, 0, 1) for dy in (-1, 0, 1))
-        c.put(x, y, glow(255 - near * 14))
-    for (x, y) in list(holes):
-        for dx, dy in ((0, 1), (1, 0), (-1, 0)):
-            p = (x + dx, y + dy)
-            if p not in holes and c.get(*p) is not None and dy == 1:
-                c.put(p[0], p[1], (250, 196, 96))
+        px, py = x + 0.5, y + 0.5
+        # the inside of the shell, lit brightest close to the flame
+        dist = math.hypot((px - fx) / 1.6, py - (wick_y - 2))
+        g = 205 - min(dist, 20) * 6.5
+        near_edge = sum((x + dx, y + dy) not in holes for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+        g -= near_edge * 6
+        col = glow(g)
+        if abs(px - cx) <= 2.2 and wick_y <= py <= base_y:
+            col = WAX if px - cx < 1.0 else (210, 190, 8)           # wax, shaded on one side
+        t = (wick_y - py) / flame_h                                   # 0 at the wick, 1 at the tip
+        if 0.0 <= t <= 1.0:
+            w = (1.6 if t < 0.45 else 1.6 * (1.0 - (t - 0.45) / 0.55)) + 0.3
+            if abs(px - (fx + t * FLAME_SWAY[frame] * 0.8)) <= w:
+                col = glow(255) if t > 0.15 else glow(205)
+        c.put(x, y, col)
+    # the cut flesh: a pale rim on the hole edges facing away from the middle, and along the bottom
+    for (x, y) in holes:
+        side = 1 if x + 0.5 > cx else -1
+        for dx, dy in ((side, 0), (0, 1)):
+            if (x + dx, y + dy) not in holes:
+                col = c.get(x, y)
+                if col and col[2] == 7:
+                    c.put(x, y, FLESH)
+                break
+    # light leaking through the thin skin round the cuts
+    for (x, y), col in list(c.px.items()):
+        if (x, y) in holes or col[2] in (7, 8):
+            continue
+        near = min((abs(x - hx) + abs(y - hy) for hx, hy in holes if abs(x - hx) < 4 and abs(y - hy) < 4), default=9)
+        if near <= 2:
+            c.px[(x, y)] = mix(col, SPILL, (3 - near) * 0.12)
     if kind == 2:
-        # the stitches: teeth left standing in the grin
         my = cy + ry * 0.38
         for tx in (-8, -3, 3, 8):
             for ty in range(2):
                 c.put(cx + tx, my + 1 + ty, mix(ORANGE, ORANGE_DARK, 0.3))
-        # pupils
-        c.put(cx - 9, ey, mix(ORANGE, ORANGE_DARK, 0.5))
-        c.put(cx + 8, ey, mix(ORANGE, ORANGE_DARK, 0.5))
+    # no plain skin pixel may look like one of the shader's light codes
+    for p, col in list(c.px.items()):
+        if col[2] not in (7, 8) and col[0] > 229 and 6 <= col[2] <= 10:
+            c.px[p] = (col[0], col[1], 12)
+    return c
+
+
+# ---------------------------------------------------------------- the witch's hut
+
+WOOD = (74, 54, 40)
+WOOD_DARK = (40, 28, 24)
+SHINGLE = (66, 48, 62)
+STONE_H = (96, 92, 100)
+
+
+def window_glow(g):
+    """Light in the hut's windows: blue = 9 marks it, green carries the brightness."""
+    return (255, clamp(g), 9)
+
+
+def draw_hut():
+    c = Cell(HUTW, HUTH)
+    rnd = random.Random(1313)
+    floor_y = 100
+    # stilts under the porch, then the porch deck with steps down in the middle
+    for x in (16, 40, 88, 112):
+        for y in range(floor_y + 4, HUTH):
+            c.put(x, y, WOOD_DARK)
+            c.put(x + 1, y, WOOD_DARK)
+    for y in range(floor_y, floor_y + 5):
+        for x in range(10, 118):
+            plank = (x // 9) % 2
+            col = mix(WOOD, (96, 72, 52), 0.3 * plank) if y < floor_y + 3 else WOOD_DARK
+            if x % 9 == 0:
+                col = WOOD_DARK
+            c.put(x, y, col)
+    for step in range(3):
+        y0 = floor_y + 5 + step * 5
+        for y in range(y0, y0 + 5):
+            for x in range(54 - step * 2, 76 + step * 2):
+                c.put(x, y, WOOD if y < y0 + 2 else WOOD_DARK)
+    # porch railing posts and rail
+    for x in (12, 116):
+        for y in range(floor_y - 16, floor_y):
+            c.put(x, y, WOOD_DARK)
+            c.put(x + 1, y, WOOD)
+    for x in range(12, 50):
+        c.put(x, floor_y - 12 + (x % 7 == 0), WOOD)
+    for x in range(84, 118):
+        c.put(x, floor_y - 12 + (x % 9 == 0), WOOD)
+    # the walls lean: wider at the bottom, crooked to the left
+    for y in range(48, floor_y):
+        left = 24 + (floor_y - y) * 0.10
+        right = 104 - (floor_y - y) * 0.03 + math.sin(y * 0.15) * 0.6
+        for x in range(int(left), int(right) + 1):
+            plank = int((x - left) // 5)
+            shade_k = 0.75 + 0.35 * random.Random(plank * 7 + 3).random()
+            col = shade(WOOD, shade_k)
+            if (x - left) % 5 < 1:
+                col = WOOD_DARK                                  # gaps between the planks
+            if x > right - 4:
+                col = mix(col, (130, 120, 140), 0.25)            # moonlit right edge
+            if rnd.random() < 0.03:
+                col = shade(col, 0.6)                            # knots and rot
+            c.put(x, y, col)
+    # a crooked patch board nailed across
+    c.line(30, 88, 50, 85, (112, 86, 60), 2)
+    # the door: arched, dark, light leaking round it, a little round window
+    for y in range(62, floor_y):
+        for x in range(66, 85):
+            dx, dy = x + 0.5 - 75.5, y + 0.5 - 70
+            if dy > 0 or dx * dx + dy * dy <= 90:
+                col = (34, 22, 18) if (x - 66) % 5 else (24, 16, 14)
+                c.put(x, y, col)
+    for y in range(64, floor_y):
+        c.put(85, y, window_glow(55))
+    c.put(73, 82, (150, 140, 60))                                # door knob
+    for y in range(66, 72):
+        for x in range(72, 79):
+            if (x + 0.5 - 75.5) ** 2 + (y + 0.5 - 69) ** 2 <= 9:
+                c.put(x, y, window_glow(170))
+    # the big crooked window, glowing, with a cross frame
+    for y in range(60, 82):
+        for x in range(34, 56):
+            dx, dy = (x + 0.5 - 45) / 10.0, (y + 0.5 - 71) / 11.0
+            r = dx * dx + dy * dy
+            if r <= 1.0:
+                if r > 0.72:
+                    c.put(x, y, (52, 36, 28))                    # frame
+                elif abs(x + 0.5 - 45 - (y - 71) * 0.1) < 1.0 or abs(y + 0.5 - 71) < 1.0:
+                    c.put(x, y, (52, 36, 28))                    # cross
+                else:
+                    c.put(x, y, window_glow(255 - int(r * 90) - (20 if y > 72 else 0)))
+    # roof: steep, overhanging, shingled, with a bent tip curling over to the left
+    apex = (60, 10)
+    for y in range(4, 58):
+        for x in range(4, 124):
+            # left slope from (8, 56) to the apex, right slope from the apex to (122, 54)
+            yl = 56 + (apex[1] - 56) * (x - 8) / (apex[0] - 8) if x <= apex[0] else None
+            yr = apex[1] + (54 - apex[1]) * (x - apex[0]) / (122 - apex[0]) if x >= apex[0] else None
+            edge = yl if yl is not None else yr
+            sag = math.sin((x - 8) / 114.0 * math.pi) * 3.0         # the ridge line sags
+            if y < edge + sag * 0.3 or y > 56 - (0 if x < 64 else (x - 64) * 0.03):
+                continue
+            row = int((y - edge) // 4)
+            col = shade(SHINGLE, 0.8 + 0.3 * ((row + (x + row * 3) // 6) % 2))
+            if (y - edge) % 4 < 1:
+                col = shade(SHINGLE, 0.55)
+            if x > 100:
+                col = mix(col, (120, 112, 132), 0.15)
+            c.put(x, y, col)
+    c.line(apex[0], apex[1], 54, 4, SHINGLE, 3)
+    c.line(54, 4, 47, 6, SHINGLE, 2)
+    c.line(47, 6, 45, 10, SHINGLE, 1)
+    # a small round attic window in the roof
+    for y in range(30, 40):
+        for x in range(56, 66):
+            r = (x + 0.5 - 61) ** 2 + (y + 0.5 - 35) ** 2
+            if r <= 20:
+                c.put(x, y, (52, 36, 28) if r > 12 else window_glow(200))
+    # crooked stone chimney on the right of the roof
+    for y in range(16, 46):
+        lean = (46 - y) * 0.12
+        for x in range(int(88 + lean), int(99 + lean)):
+            row = (y - 16) // 3
+            col = shade(STONE_H, 0.7 + 0.3 * ((x // 4 + row) % 2))
+            if (y - 16) % 3 == 0 or (x + row * 2) % 4 == 0:
+                col = shade(STONE_H, 0.5)
+            c.put(x, y, col)
+    for x in range(int(87 + 3.6), int(101 + 3.6)):
+        c.put(x, 15, shade(STONE_H, 0.85))
+        c.put(x, 16, shade(STONE_H, 0.6))
+    c.outline(lambda col: shade(col, 0.6) if col[2] != 9 else col)
     return c
 
 
@@ -512,7 +698,9 @@ def draw_tomb(kind):
 def main():
     img = Image.new("RGB", (SHEET_W, SHEET_H), KEY)
     for k in range(3):
-        draw_pumpkin(k).blit(img, k * PKW, PK_Y)
+        for f in range(4):
+            draw_pumpkin(k, f).blit(img, f * PKW, PK_Y + k * PKH)
+    draw_hut().blit(img, HUT_X, 0)
     for k in range(2):
         for f in range(4):
             draw_zombie(k, f).blit(img, f * ZW, Z_Y + k * ZH)
@@ -527,7 +715,7 @@ def main():
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-sheet.png")
     img.save(out)
     print("wrote", out, img.size)
-    print(f"PK_Y={PK_Y} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
+    print(f"PK_Y={PK_Y} HUT_X={HUT_X} Z_Y={Z_Y} W_Y={W_Y} S_Y={S_Y} H_Y={H_Y} T_Y={T_Y} G_Y={G_Y}")
 
 
 if __name__ == "__main__":

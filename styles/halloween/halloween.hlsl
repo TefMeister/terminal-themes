@@ -2,11 +2,14 @@
 // Back to front: a banded night sky with stars, a big moon and drifting clouds; witches on brooms
 // flying across in the distance; two rows of hills with dead trees and gravestones; a foggy field
 // rolling towards you, with zombies walking out of the dark (seen only when lightning lights them);
+// the witch's hut on the left with its glowing window, smoking chimney and pumpkins on the porch;
 // the big sheet ghost that rises in the middle; glowing evil-eyed pumpkins along the bottom; then,
 // nearest of all, spiders dangling from the top and crawling on the inside of the glass (so you see
 // their undersides).
-// Every GHOST_PERIOD seconds the ghost appears, and three lightning strikes, at uneven times, light
-// the whole picture up. Each flash swells, flickers and fades rather than blinking.
+// Every GHOST_PERIOD seconds the top of the sky slowly darkens, then the ghost appears: three
+// lightning strikes light the whole picture up, and more keep striking at uneven times for as long as
+// it stays, with smaller bolts flashing far off. Each flash swells, flickers and fades rather than
+// blinking. The zombies are always there as black shapes; only the lightning shows what they are.
 // Everything is drawn on a grid of chunky pixels (CELL_PIXELS) and moves FPS times a second; the
 // flashes run at FLASH_FPS so they look animated.
 // Sprites come from halloween-sheet.png (drawn by halloween-sprites.py; the layout constants below
@@ -22,17 +25,18 @@ static const float  CELL_PIXELS    = 3.0;    // screen pixels per chunky pixel
 static const float  FPS            = 10.0;   // how often things move per second
 static const float  FLASH_FPS      = 30.0;   // how often the lightning light changes per second
 static const float  SCENE_BRIGHT   = 0.62;   // overall picture brightness (text is not affected)
-static const float  EDGE_DARK      = 0.45;   // how much the corners darken
+static const float  EDGE_FADE      = 0.09;   // share of each side over which the picture fades to black
 
 // --- sprite sheet layout (matches halloween-sprites.py) ---
-static const int    SHEET_W = 256, SHEET_H = 318;
-static const int    PKW = 48, PKH = 40, PK_Y = 0;     // pumpkins: 3 kinds
-static const int    ZW = 24, ZH = 44, Z_Y = 40;       // zombies: 2 kinds x 4 frames
-static const int    WW = 40, WH = 24, W_Y = 128;      // witch: 4 frames
-static const int    SW = 40, SH = 40, S_Y = 152;      // spider from underneath: 4 frames
-static const int    HW = 24, HH = 24, H_Y = 192;      // hanging spider: 2 frames
-static const int    TW = 64, TH = 80, T_Y = 216;      // dead trees: 2 kinds
-static const int    GW = 16, GH = 22, G_Y = 296;      // gravestones: 4 kinds
+static const int    SHEET_W = 320, SHEET_H = 398;
+static const int    PKW = 48, PKH = 40, PK_Y = 0;     // pumpkins: 3 kinds (rows) x 4 candle-flame frames
+static const int    HUTW = 128, HUTH = 120, HUT_X = 192;  // the witch's hut
+static const int    ZW = 24, ZH = 44, Z_Y = 120;      // zombies: 2 kinds x 4 frames
+static const int    WW = 40, WH = 24, W_Y = 208;      // witch: 4 frames
+static const int    SW = 40, SH = 40, S_Y = 232;      // spider from underneath: 4 frames
+static const int    HW = 24, HH = 24, H_Y = 272;      // hanging spider: 2 frames
+static const int    TW = 64, TH = 80, T_Y = 296;      // dead trees: 2 kinds
+static const int    GW = 16, GH = 22, G_Y = 376;      // gravestones: 4 kinds
 
 // --- sky ---
 static const float3 SKY_TOP        = float3(0.035, 0.015, 0.075);
@@ -54,6 +58,14 @@ static const float  GHOST_FADE_OUT = 3.0;
 static const float3 FLASH_SKY      = float3(0.80, 0.82, 1.00);
 static const float  FLASH_STEPS    = 12.0;   // brightness steps of a flash (pixel-art banding)
 static const float3 BOLT_COLOUR    = float3(1.00, 0.97, 1.00);
+static const int    STRIKES        = 12;     // most strikes in one visit; they stop when the ghost leaves
+static const float  STRIKE_GAP_MIN = 1.0;    // seconds between strikes after the first three...
+static const float  STRIKE_GAP_MAX = 4.5;    // ...picked at random in this range, so never regular
+static const int    DISTANT_EACH   = 2;      // small far-off bolts that follow each strike
+static const float  DIM_LEAD       = 6.0;    // seconds the sky darkens before the ghost comes
+static const float  DIM_RELEASE    = 4.0;    // seconds it takes to clear after the ghost has gone
+static const float  DIM_AMOUNT     = 0.65;   // how dark the top of the picture gets
+static const float  DIM_REACH      = 0.85;   // how far down the darkening reaches (share of the height)
 
 // --- hills, trees, gravestones ---
 static const float3 HILL_FAR       = float3(0.090, 0.055, 0.120);
@@ -73,10 +85,13 @@ static const float  FOG_AMOUNT     = 0.85;
 
 // --- zombies ---
 static const int    ZOMBIES        = 14;
-static const float  ZOMBIE_TRIP    = 50.0;   // typical seconds to walk from the horizon to you
+static const float  ZOMBIE_TRIP    = 95.0;   // typical seconds to shuffle from the horizon to you
 static const float  ZOMBIE_FAR     = 0.22;   // size on the horizon
 static const float  ZOMBIE_NEAR    = 3.2;    // size when they reach the front
-static const float  ZOMBIE_DARK    = 0.035;  // how much of them shows without lightning (almost nothing)
+static const float  ZOMBIE_LURCH   = 0.85;   // lurches per second (one step to each side)
+static const float  ZOMBIE_LEAN    = 0.20;   // how far the body leans into each lurch
+static const float  ZOMBIE_SWAY    = 3.0;    // how far, in sprite pixels, the body swings side to side
+static const float  ZOMBIE_HAZE    = 0.55;   // far zombies melt into the fog
 
 // --- the ghost ---
 static const float  GHOST_HEIGHT   = 0.58;   // share of the height
@@ -91,14 +106,30 @@ static const float  WIND           = 0.13;   // how far the wind pushes the shee
 // --- pumpkins (listed back to front) ---
 static const int    PUMPKINS       = 6;
 static const float  PK_X[6]        = { 0.37, 0.64, 0.23, 0.80, 0.95, 0.07 };
-static const float  PK_SCALE[6]    = { 0.85, 1.00, 1.30, 1.55, 2.10, 2.40 };
+static const float  PK_SCALE[6]    = { 0.62, 0.75, 1.20, 1.50, 2.10, 2.40 };
 static const float  PK_BOTTOM[6]   = { -30, -26, -17, -10, 9, 10 };   // cells below the bottom edge
 static const int    PK_KIND[6]     = { 2, 1, 1, 2, 0, 0 };
 static const float3 CANDLE_DEEP    = float3(1.00, 0.30, 0.02);
 static const float3 CANDLE_HOT     = float3(1.00, 0.92, 0.50);
 static const float  CANDLE_GLOW    = 1.9;    // pumpkin faces are brighter than the rest of the picture
-static const float  PUMPKIN_BODY   = 0.38;   // pumpkin skin brightness in the dark
+static const float  PUMPKIN_BODY   = 0.60;   // pumpkin skin brightness in the dark
 static const float  POOL_SIZE      = 34.0;   // reach of the orange light on the ground, in cells
+static const float  HALO_SIZE      = 26.0;   // reach of the light round a small pumpkin, per unit of its size
+static const int    HILL_PUMPKINS  = 4;      // small ones among the gravestones
+static const float  HILL_PK_X[4]   = { 0.33, 0.49, 0.70, 0.90 };
+static const float  HILL_PK_SCALE  = 0.21;
+
+// --- the witch's hut ---
+static const float  HUT_POS        = 0.14;   // across the width, of its middle
+static const float  HUT_SIZE       = 0.42;   // height, as a share of the window
+static const float  HUT_DEPTH      = 0.10;   // how far in front of the horizon it stands (share of the field)
+static const float  HUT_DARK       = 0.85;   // how much the moon shows of it
+static const float3 WINDOW_COLOUR  = float3(0.62, 1.00, 0.38);   // a witchy green glow
+static const float  PORCH_PK_X[2]  = { 24.0, 104.0 };           // pumpkins on the porch, in hut pixels
+static const float  PORCH_PK_SCALE = 0.24;   // their size, relative to the hut's
+static const float  SMOKE_RISE     = 0.25;   // how fast the smoke climbs
+static const float3 SMOKE_COLOUR   = float3(0.34, 0.31, 0.38);
+static const float3 RIM_COLOUR     = float3(0.06, 0.06, 0.10);   // moonlight on the zombies' edges
 
 // --- witches ---
 static const int    WITCHES        = 4;
@@ -210,309 +241,96 @@ float strikeLight(float a)
     return e;
 }
 
-// the ghost's visit: n is which visit, t the seconds into it; s holds the three strike times
-void ghostTimes(float T, out float n, out float t, out float3 s)
+// the ghost's visit: n is which visit, t the seconds into it, s1 when it appears (with the first strike)
+void ghostTimes(float T, out float n, out float t, out float s1)
 {
     float f = loopFreq(1.0 / GHOST_PERIOD);
     float p = T * f;
     n = loopIndex(floor(p), f);
     t = frac(p) / f;
-    s.x = 1.0 + hash(n * 3.1) * 0.8;
-    s.y = s.x + 0.6 + hash(n * 5.7) * 1.9;      // uneven gaps
-    s.z = s.y + 0.35 + hash(n * 8.3) * 1.5;
+    s1 = DIM_LEAD + hash(n * 3.1) * 0.8;
 }
 
-float flashAt(float t, float n, float3 s)
+// strike i of visit n: when it lands (after the one before it, at `prev`) and how strong it is.
+// The first three come close together, the rest at random gaps until the ghost leaves.
+float nextStrike(float n, int i, float prev)
 {
-    float f = strikeLight(t - s.x) * (0.85 + 0.15 * hash(n + 1.0));
-    f = max(f, strikeLight(t - s.y) * (0.65 + 0.35 * hash(n + 2.0)));
-    f = max(f, strikeLight(t - s.z) * (0.80 + 0.20 * hash(n + 3.0)));
+    float h = hash(n * 7.3 + i * 1.91);
+    if (i == 0) return prev;
+    if (i == 1) return prev + 0.6 + h * 1.9;
+    if (i == 2) return prev + 0.35 + h * 1.5;
+    return prev + STRIKE_GAP_MIN + h * (STRIKE_GAP_MAX - STRIKE_GAP_MIN);
+}
+float strikeStrength(float n, int i) { return i < 3 ? 0.85 + 0.15 * hash(n + i) : 0.35 + 0.6 * hash(n * 2.7 + i); }
+
+float flashAt(float t, float n, float s1)
+{
+    float f = 0.0, st = s1;
+    [loop] for (int i = 0; i < STRIKES; i++)
+    {
+        st = nextStrike(n, i, st);
+        if (st > s1 + GHOST_STAY) break;
+        f = max(f, strikeLight(t - st) * strikeStrength(n, i));
+    }
     return f;
 }
 
-// the bolt itself, while a strike is young: a jagged line from the top down to the hills
-float bolt(float2 c, float t, float n, float3 s, float bottom, float2 grid)
+// a jagged line from `top` down to `bottom` at around x0, with a branch part way down
+float boltLine(float2 c, float x0, float top, float bottom, float seed, float wobble, float width)
 {
-    float b = 0.0;
-    for (int i = 0; i < 3; i++)
+    if (c.y < top || c.y > bottom) return 0.0;
+    float x = x0 + noise1(c.y * 0.07 + seed) * wobble + noise1(c.y * 0.31 + seed * 2.0) * wobble * 0.25;
+    if (abs(c.x - x) < (c.y < lerp(top, bottom, 0.5) ? width : width * 0.66)) return 1.0;
+    float by = lerp(top, bottom, 0.30 + 0.25 * hash(seed + 1.0));
+    float dir = hash(seed + 2.0) < 0.5 ? -1.0 : 1.0;
+    if (c.y > by && c.y < by + (bottom - top) * 0.35)
     {
-        float a = t - s[i];
-        if (a < 0.0 || a > 0.32) continue;
+        float bx0 = x0 + noise1(by * 0.07 + seed) * wobble + noise1(by * 0.31 + seed * 2.0) * wobble * 0.25;
+        float bx = bx0 + dir * (c.y - by) * 0.8 + noise1(c.y * 0.4 + seed * 3.0) * wobble * 0.2;
+        if (abs(c.x - bx) < width * 0.5) return 0.75;
+    }
+    return 0.0;
+}
+
+// the bolts: big ones from the top of the sky for each strike, small ones far off near the horizon.
+// Returns how much bolt light is on this cell (x) and how much far-off glow lights the sky here (y).
+float2 bolts(float2 c, float t, float n, float s1, float2 grid, float horizonY, out float distant)
+{
+    float b = 0.0, glow = 0.0, st = s1;
+    distant = 0.0;
+    [loop] for (int i = 0; i < STRIKES; i++)
+    {
+        st = nextStrike(n, i, st);
+        if (st > s1 + GHOST_STAY) break;
         float seed = n * 17.0 + i * 5.3;
-        float x0 = grid.x * (0.08 + 0.84 * hash(seed));
-        float x  = x0 + noise1(c.y * 0.07 + seed) * 16.0 + noise1(c.y * 0.31 + seed * 2.0) * 4.0;
-        float on = strikeLight(a) > 0.45 ? 1.0 : 0.55;
-        if (c.y <= bottom && abs(c.x - x) < (c.y < bottom * 0.5 ? 1.5 : 1.0)) b = max(b, on);
-        // a branch splitting off part way down
-        float by = bottom * (0.30 + 0.25 * hash(seed + 1.0));
-        float dir = hash(seed + 2.0) < 0.5 ? -1.0 : 1.0;
-        if (c.y > by && c.y < by + bottom * 0.35)
+        float a = t - st;
+        if (a >= 0.0 && a < 0.32)
         {
-            float bx0 = x0 + noise1(by * 0.07 + seed) * 16.0 + noise1(by * 0.31 + seed * 2.0) * 4.0;
-            float bx = bx0 + dir * (c.y - by) * 0.8 + noise1(c.y * 0.4 + seed * 3.0) * 3.0;
-            if (abs(c.x - bx) < 0.8) b = max(b, on * 0.75);
+            float x0 = grid.x * (0.06 + 0.88 * hash(seed));
+            float bottom = horizonY - grid.y * 0.12;
+            float on = strikeLight(a) > 0.45 ? 1.0 : 0.55;
+            b = max(b, boltLine(c, x0, 0.0, bottom, seed, 16.0, 1.5) * on * min(1.0, strikeStrength(n, i) + 0.3));
+            glow = max(glow, saturate(1.0 - abs(c.x - x0) / 30.0) * 0.18 * strikeLight(a) * step(c.y, bottom));
         }
-        // glow round the bolt lights the clouds near it
-        b = max(b, saturate(1.0 - abs(c.x - x) / 30.0) * 0.18 * strikeLight(a) * step(c.y, bottom));
-    }
-    return b;
-}
-
-// ---------------------------------------------------------------- the ghost
-
-// is cell c inside the ghost's sheet? p.x across, p.y down, both in ghost heights from its crown
-bool inGhost(float2 p, float T, out float lit)
-{
-    lit = 0.0;
-    float v = p.y;
-    if (v < 0.0 || v > 1.12) return false;
-    float wind = WIND * (1.0 + 0.3 * sin(T * loopRate(0.7)));
-    // the wind blows from the right, so the lower the cloth the further it streams to the left
-    float bend = -wind * pow(max(v - 0.12, 0.0), 1.4) * 1.5 - 0.025 * sin(v * 9.0 - T * loopRate(5.0)) * v;
-    float u = p.x - bend;
-    bool inside;
-    if (v < 0.30)
-        inside = u * u + (v - 0.30) * (v - 0.30) < 0.28 * 0.28;
-    else
-    {
-        float d = v - 0.30;
-        float wR = 0.28 + 0.03 * d - 0.03 * sin(v * 13.0 - T * loopRate(6.5)) * d;      // pressed flat by the wind
-        float wL = 0.28 + 0.30 * pow(d, 1.2) + 0.06 * sin(v * 8.0 - T * loopRate(5.5)) * d; // billowing out
-        float hem = 0.95 + 0.05 * sin(u * 21.0 - T * loopRate(7.0)) + 0.06 * abs(sin(u * 7.0 + T * loopRate(3.0)))
-                  - 0.12 * saturate(-u / 0.5) * (0.6 + 0.4 * sin(T * loopRate(4.0)));   // the windward hem lifts
-        inside = u > -wL && u < wR && v < hem;
-        // ragged tails torn off the leeward side, flapping out in the wind
-        for (int i = 0; i < 3 && !inside; i++)
+        [loop] for (int j = 0; j < DISTANT_EACH; j++)
         {
-            float fi = (float)i;
-            float len = 0.16 + 0.07 * sin(T * loopRate(3.1) + fi * 2.0);
-            float along = (-wL - u) / len;                       // 0 where it leaves the cloth, 1 at its tip
-            if (along < -0.2 || along > 1.0) continue;
-            float cy = 0.62 + 0.15 * fi + 0.05 * sin(along * 5.0 - T * loopRate(8.0) + fi) - along * 0.06;
-            inside = abs(v - cy) < 0.035 * (1.0 - along) + 0.004;
+            float ds = seed * 1.7 + j * 11.0;
+            float da = a - (0.15 + hash(ds) * 2.2);              // they follow at uneven delays
+            if (da < 0.0 || da > 0.8) continue;
+            float e = strikeLight(da) * (0.4 + 0.4 * hash(ds + 4.0));
+            distant = max(distant, e);
+            float x0 = grid.x * hash(ds + 1.0);
+            float foot = horizonY - grid.y * (0.10 + 0.04 * hash(ds + 3.0));
+            float top = foot - grid.y * (0.10 + 0.14 * hash(ds + 2.0));
+            if (da < 0.25) b = max(b, boltLine(c, x0, top, foot, ds, 5.0, 0.55) * 0.55 * (e > 0.2 ? 1.0 : 0.5));
+            glow = max(glow, saturate(1.0 - length((c - float2(x0, foot)) / float2(55.0, 30.0))) * e * 0.35);
         }
     }
-    if (!inside) return false;
-    // folds run down the cloth and ripple with the wind; the moon lights it from the upper right
-    float fold = sin(u * 30.0 + v * 5.0 - T * loopRate(3.5) + v * v * 8.0);
-    lit = 0.72 + 0.20 * fold * saturate(v * 1.4) + 0.25 * saturate(u / 0.3) - 0.20 * saturate(v - 0.6);
-    return true;
+    return float2(b, glow);
 }
 
-float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float flash, float dth)
-{
-    if (alpha <= 0.0) return col;
-    float h = grid.y * GHOST_HEIGHT;
-    float2 crown = float2(grid.x * 0.5 + sin(T * loopRate(0.31)) * grid.x * 0.025,
-                          grid.y * GHOST_TOP + sin(T * loopRate(0.9)) * 2.5);
-    float2 p = (float2(cell) + 0.5 - crown) / h;
-    if (p.x < -0.75 || p.x > 0.45 || p.y < -0.05 || p.y > 1.15) return col;
-    float lit;
-    bool inside = inGhost(p, T, lit);
-    if (!inside)
-    {
-        // a faint cold aura just outside the cloth
-        float l2;
-        if (inGhost(float2(p.x * 0.93, (p.y - 0.5) * 0.95 + 0.5), T, l2) && dth < alpha * 0.6)
-            col += float3(0.05, 0.06, 0.10) * (1.0 + flash);
-        return col;
-    }
-    // appear and vanish as a dissolve, not a fade, to keep it pixel-art
-    if (dth > alpha) return col;
-    float l0, l1, l2, l3;
-    float px = 1.0 / h;
-    bool edge = !inGhost(p + float2(px, 0), T, l0) || !inGhost(p - float2(px, 0), T, l1)
-             || !inGhost(p + float2(0, px), T, l2) || !inGhost(p - float2(0, px), T, l3);
-    float3 g = lerp(GHOST_SHADE, GHOST_LIGHT, steps(lit, 5.0, dth * 0.3));
-    if (edge) g = GHOST_EDGE;
-    // the two eye holes, leaning with the head
-    float wind = WIND * (1.0 + 0.3 * sin(T * loopRate(0.7)));
-    float2 e = p - float2(-wind * 0.05, 0.21);
-    for (int side = -1; side <= 1; side += 2)
-    {
-        float2 q = e - float2(side * 0.095, side * 0.008);
-        q.x += q.y * 0.25 * side;                     // slanted a little, for a sad, hollow look
-        if ((q.x * q.x) / (0.048 * 0.048) + (q.y * q.y) / (0.075 * 0.075) < 1.0) g = GHOST_EYE;
-    }
-    g *= 1.0 + flash * 0.4;
-    return lerp(col, g, GHOST_OPACITY);
-}
-
-// ---------------------------------------------------------------- the rest of the cast
-
-float3 drawWitches(float3 col, int2 cell, float2 grid, float T, int tick, float3 sky)
-{
-    for (int k = 0; k < WITCHES; k++)
-    {
-        float fk = (float)k;
-        float trip = WITCH_TRIP * lerp(0.75, 1.35, hash(fk * 3.3));
-        float cyc  = trip * lerp(1.4, 2.2, hash(fk * 4.7));
-        float f    = loopFreq(1.0 / cyc);
-        float ph   = frac(T * f + hash(fk * 9.1)) / f;              // seconds into this witch's cycle
-        float tripL = trip * (1.0 / f) / cyc;                       // the trip, stretched to fit the loop
-        if (ph > tripL) continue;
-        bool right = (k & 1) == 0;
-        float sc   = lerp(0.55, 1.15, hash(fk * 5.9));
-        float u    = ph / tripL;
-        float x    = lerp(-0.1, 1.1, right ? u : 1.0 - u) * grid.x;
-        float y    = grid.y * lerp(0.05, 0.32, hash(fk * 7.7)) + sin(T * loopRate(1.3) + fk) * 2.0 + u * 6.0 * (hash(fk) - 0.5);
-        int frame  = pmod(tick / 2 + k, 4);
-        float4 t = sprite(cell, float2(x - WW * sc * 0.5, y), sc, frame * WW, W_Y, WW, WH, !right);
-        // smaller means further away, so a little more lost in the night air
-        if (t.w > 0) col = lerp(SILHOUETTE, sky, 0.45 * (1.15 - sc));
-    }
-    return col;
-}
-
-float hillFar(float x, float2 grid)  { return grid.y * (HORIZON - 0.13) + sin(x * 0.012 + 1.0) * 9.0 + sin(x * 0.031) * 4.0 + noise1(x * 0.2) * 1.0; }
-float hillNear(float x, float2 grid) { return grid.y * (HORIZON - 0.045) + sin(x * 0.009 + 4.0) * 6.0 + sin(x * 0.023 + 2.0) * 3.0; }
-
-float3 drawYard(float3 col, int2 cell, float2 grid, float flash)
-{
-    // dead trees standing on the near hill
-    for (int k = 0; k < TREES; k++)
-    {
-        float fk = (float)k;
-        float x  = grid.x * (0.06 + 0.88 * (fk + 0.15 + 0.7 * hash(fk * 2.1)) / TREES);
-        float sc = lerp(0.8, 1.25, hash(fk * 6.3));
-        float4 t = sprite(cell, float2(x - TW * sc * 0.5, hillNear(x, grid) + 3.0 - TH * sc), sc, (k & 1) * TW, T_Y, TW, TH, hash(fk) > 0.5);
-        if (t.w > 0) col = SILHOUETTE;
-    }
-    // gravestones along the brow of the hill, catching moonlight and lightning
-    for (int j = 0; j < TOMBS; j++)
-    {
-        float fj = (float)j;
-        float x  = grid.x * (fj + 0.5 + (hash(fj * 3.7) - 0.5) * 0.7) / TOMBS;
-        float sc = lerp(0.8, 1.15, hash(fj * 1.3));
-        float4 t = sprite(cell, float2(x - GW * sc * 0.5, hillNear(x, grid) + 4.0 + hash(fj * 8.8) * 4.0 - GH * sc), sc,
-                          pmod((int)(hash(fj * 4.4) * 4.0), 4) * GW, G_Y, GW, GH, false);
-        if (t.w > 0) col = t.rgb * (TOMB_LIGHT * 0.35 + flash * 0.9);
-    }
-    return col;
-}
-
-float3 drawZombies(float3 col, int2 cell, float2 grid, float T, int tick, float flash, float horizonY)
-{
-    float best = -1.0;
-    float3 z = col;
-    for (int k = 0; k < ZOMBIES; k++)
-    {
-        float fk = (float)k;
-        float f  = loopFreq(1.0 / (ZOMBIE_TRIP * lerp(0.75, 1.3, hash(fk * 2.9))));
-        float d  = frac(T * f + hash(fk * 6.1));                    // 0 on the horizon, 1 at the front
-        float p  = d * d;                                           // perspective: slow far away, quick up close
-        float sc = lerp(ZOMBIE_FAR, ZOMBIE_NEAR, p);
-        float feet = horizonY + 1.0 + (grid.y + ZH * ZOMBIE_NEAR * 0.6 - horizonY) * p;
-        float x  = grid.x * (0.5 + (hash(fk * 4.3) - 0.5) * (0.45 + 1.1 * p)) + sin(T * loopRate(0.4) + fk * 2.0) * 1.5 * sc;
-        if (p < best) continue;
-        int frame = pmod(tick / 3 + k * 3, 4);
-        float4 t = sprite(cell, float2(x - ZW * sc * 0.5, feet - ZH * sc), sc, frame * ZW, Z_Y + (k & 1) * ZH, ZW, ZH, hash(fk * 7.0) > 0.5);
-        if (t.w == 0) continue;
-        best = p;
-        // only the lightning shows them; near ones a touch more, as they come into the pumpkin light
-        z = t.rgb * (ZOMBIE_DARK + flash * 1.1 + p * 0.06);
-    }
-    return best >= 0.0 ? z : col;
-}
-
-float candle(int k, float T)
-{
-    float ft = T * 12.0;
-    float a = hash(floor(loopIndex(floor(ft), 12.0)) * 1.7 + k * 13.0);
-    float b = hash(floor(loopIndex(floor(ft) + 1.0, 12.0)) * 1.7 + k * 13.0);
-    return 0.7 + 0.3 * lerp(a, b, frac(ft));
-}
-
-float3 pumpkinPools(float3 col, int2 cell, float2 grid, float T, float dth)
-{
-    for (int k = 0; k < PUMPKINS; k++)
-    {
-        float2 base = float2(grid.x * PK_X[k], grid.y + PK_BOTTOM[k] - 2.0);
-        float2 d = (float2(cell) - base) / (POOL_SIZE * PK_SCALE[k] * float2(1.0, 0.38));
-        float l = saturate(1.0 - length(d));
-        col += CANDLE_DEEP * steps(l * l, 5.0, dth) * 0.22 * candle(k, T);
-    }
-    return col;
-}
-
-float3 drawPumpkins(float3 col, int2 cell, float2 grid, float T, float flash)
-{
-    for (int k = 0; k < PUMPKINS; k++)
-    {
-        float sc = PK_SCALE[k];
-        float2 at = float2(grid.x * PK_X[k] - PKW * sc * 0.5, grid.y + PK_BOTTOM[k] - PKH * sc);
-        float4 t = sprite(cell, at, sc, PK_KIND[k] * PKW, PK_Y, PKW, PKH, (k & 1) == 1);
-        if (t.w == 0) continue;
-        float fl = candle(k, T);
-        if (abs(t.b - 7.0 / 255.0) < 0.5 / 255.0 && t.r > 0.9)
-            col = lerp(CANDLE_DEEP, CANDLE_HOT, saturate(t.g * fl * 1.1 - 0.15)) * (0.75 + 0.5 * fl) * CANDLE_GLOW;
-        else
-            col = t.rgb * (PUMPKIN_BODY * (0.85 + 0.3 * fl) + flash * 0.9);
-    }
-    return col;
-}
-
-float3 drawHangers(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
-{
-    float2 c = float2(cell) + 0.5;
-    for (int k = 0; k < HANGERS; k++)
-    {
-        float fk = (float)k;
-        float f  = loopFreq(1.0 / (HANG_CYCLE * lerp(0.8, 1.2, hash(fk * 3.0))));
-        float ph = frac(T * f + 0.5 * fk + 0.1);
-        float n  = loopIndex(floor(T * f + 0.5 * fk + 0.1), f);
-        float cyc = 1.0 / f;
-        float t  = ph * cyc;
-        float len = grid.y * lerp(0.22, 0.48, hash(n * 2.3 + fk));
-        float l = 0.0;
-        if (t < 3.0)        l = len * (1.0 - pow(1.0 - t / 3.0, 3.0)) * (1.0 + 0.10 * sin(t * 9.0) * (t / 3.0)); // drop, with a bounce
-        else if (t < 12.0)  l = len * (1.0 + 0.04 * sin(t * 4.0) * exp(-(t - 3.0)));
-        else if (t < 16.5)  l = len * (1.0 - (t - 12.0) / 4.5);                                                // climb back up
-        else continue;
-        float swing = 0.30 * sin(t * 1.7 + fk) * exp(-max(t - 3.0, 0.0) * 0.15) * saturate(t / 2.0);
-        float2 anchor = float2(grid.x * (0.12 + 0.76 * hash(n * 5.1 + fk * 11.0)), -1.0);
-        float2 down = float2(sin(swing), cos(swing));
-        float2 body = anchor + down * l;
-        // the thread
-        float2 pa = c - anchor;
-        float h = saturate(dot(pa, down) / max(l, 1.0));
-        if (length(pa - down * h * l) < 0.55 && h < 1.0) col = lerp(col, THREAD_COLOUR * (1.0 + flash), 0.7);
-        float4 s = spriteTurned(cell, body, down, float2(12.0, 1.0), HANG_SCALE, (pmod(tick / 2 + k, 2)) * HW, H_Y, HW, HH);
-        if (s.w > 0) col = s.rgb * (0.9 - flash * 0.6);
-    }
-    return col;
-}
-
-// a spider walking about on the inside of the glass: walk a stretch, stop, turn, walk again
-float3 drawCrawlers(float3 col, int2 cell, float2 grid, float T, int tick, float flash)
-{
-    for (int k = 0; k < CRAWLERS; k++)
-    {
-        float fk = (float)k;
-        float f  = loopFreq(1.0 / (CRAWL_STEP * lerp(0.85, 1.25, hash(fk * 1.1))));
-        float span = T * f + hash(fk * 2.2);
-        float m  = floor(span);
-        float a  = frac(span);
-        float m0 = loopIndex(m, f), m1 = loopIndex(m + 1.0, f), m2 = loopIndex(m + 2.0, f);
-        // waypoints scattered over the window and a little past its edges, so spiders come and go
-        float2 w0 = float2(hash(m0 * 1.3 + fk * 7.0), hash(m0 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float2 w1 = float2(hash(m1 * 1.3 + fk * 7.0), hash(m1 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float2 w2 = float2(hash(m2 * 1.3 + fk * 7.0), hash(m2 * 2.9 + fk * 3.0)) * 1.4 - 0.2;
-        float walk = 0.55;
-        float2 pos = lerp(w0, w1, smoothstep(0.0, 1.0, saturate(a / walk))) * grid;
-        float2 d0 = normalize((w1 - w0) * grid + 1e-4);
-        float2 d1 = normalize((w2 - w1) * grid + 1e-4);
-        // turn towards the next stretch at the end of the rest
-        float turn = smoothstep(0.80, 1.0, a);
-        float2 dir = normalize(lerp(d0, d1, turn) + 1e-4);
-        bool moving = a < walk || turn > 0.0;
-        int frame = moving ? pmod(tick + k, 4) : 0;
-        float4 s = spriteTurned(cell, pos, -dir, float2(20.0, 22.0), CRAWL_SCALE, frame * SW, S_Y, SW, SH);
-        // lit from behind by the scene, so mostly dark; a flash turns it into a black shape
-        if (s.w > 0) col = s.rgb * (0.85 - flash * 0.75);
-    }
-    return col;
-}
+// the ghost and everyone else in the picture
+#include "halloween-cast.hlsli"
 
 // ---------------------------------------------------------------- the whole picture
 
@@ -533,10 +351,15 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     image.GetDimensions(iw, ih);
     bool sprites = iw == SHEET_W && ih == SHEET_H;
 
-    float n, gt; float3 strikes;
-    ghostTimes(Tf, n, gt, strikes);
-    float flash = steps(flashAt(gt, n, strikes), FLASH_STEPS, dth * 0.6);
-    float ghostA = saturate((gt - strikes.x + 0.1) / GHOST_FADE_IN) * saturate((strikes.x + GHOST_STAY + GHOST_FADE_OUT - gt) / GHOST_FADE_OUT);
+    // --- the ghost's visit: darkening first, then the strikes for as long as it stays ---
+    float n, gt, s1;
+    ghostTimes(Tf, n, gt, s1);
+    float distant;
+    float2 bl = bolts(c, gt, n, s1, grid, horizonY, distant);
+    float flash = steps(max(flashAt(gt, n, s1), distant * 0.18), FLASH_STEPS, dth * 0.6);
+    float ghostEnd = s1 + GHOST_STAY + GHOST_FADE_OUT;
+    float ghostA = saturate((gt - s1 + 0.1) / GHOST_FADE_IN) * saturate((ghostEnd - gt) / GHOST_FADE_OUT);
+    float dim = smoothstep(s1 - DIM_LEAD, s1, gt) * (1.0 - smoothstep(ghostEnd, ghostEnd + DIM_RELEASE, gt));
 
     // --- sky ---
     float v = c.y / max(horizonY, 1.0);
@@ -559,30 +382,30 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     // drifting clouds, lit at the rim near the moon
     float2 cp = c * float2(0.010, 0.045) + float2(T * loopRate(0.05) / TAU * 6.0, 0.0);
     float cl = noise2(cp) * 0.65 + noise2(cp * 2.7 + 5.0) * 0.35;
-    float band = saturate(1.0 - abs(v - 0.30) / 0.24);
-    float cloud = cl * band;
+    float cloud = cl * saturate(1.0 - abs(v - 0.30) / 0.24);
     if (cloud > 0.55)
     {
-        // the moon lights the clouds' undersides near it
         float rim = saturate(1.0 - md / (mr * 3.0));
         float edge = saturate((0.62 - cloud) / 0.07);
         col = lerp(CLOUD_COLOUR, CLOUD_RIM, steps(rim * (0.35 + 0.65 * edge), 4.0, dth));
-        if (md < mr) col = lerp(col, MOON_COLOUR * 0.55, 0.35);     // thin cloud over the moon
+        if (md < mr) col = lerp(col, MOON_COLOUR * 0.55, 0.35);
         col += FLASH_SKY * flash * 0.45;
     }
     col = lerp(col, FLASH_SKY, flash * 0.55 * (1.0 - v * 0.3));
+    col += FLASH_SKY * steps(bl.y, 5.0, dth) * step(c.y, horizonY);   // far-off lightning glowing in the sky
     float3 sky = col;
-    col = lerp(col, BOLT_COLOUR, bolt(c, gt, n, strikes, hillFar(c.x, grid) + 2.0, grid));
-    if (sprites) col = drawWitches(col, cell, grid, T, tick, sky);
+    col = lerp(col, BOLT_COLOUR, bl.x);
+    [branch] if (sprites) col = drawWitches(col, cell, grid, T, tick, sky);
 
     // --- hills: the far row lights up in a flash, the near row stays almost black ---
     float hf = hillFar(c.x, grid), hn = hillNear(c.x, grid);
     if (c.y >= hf) col = HILL_FAR * (1.0 + steps(saturate((c.y - hf) / 20.0), 3.0, dth) * -0.3) + FLASH_SKY * flash * HILL_FAR_FLASH * 0.5;
-    if (sprites) col = drawYard(col, cell, grid, flash);
+    [branch] if (sprites) col = drawYard(col, cell, grid, flash);
     if (c.y >= hn && c.y < horizonY) col = HILL_NEAR + FLASH_SKY * flash * HILL_NEAR_FLASH * 0.4;
+    [branch] if (sprites) col = drawHillPumpkins(col, cell, grid, T, tick, flash, dth);
 
-    // --- the field rolling towards you, foggy far away ---
-    if (c.y >= horizonY)
+    // --- the field rolling towards you ---
+    [branch] if (c.y >= horizonY)
     {
         float d = saturate((c.y - horizonY) / max(grid.y - horizonY, 1.0));
         float3 g = lerp(GROUND_FAR, GROUND_NEAR, steps(d, 6.0, dth));
@@ -591,30 +414,44 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         float rows = frac(1.0 / (d + 0.08) * 1.3);                  // furrows bunching up into the distance
         if (rows < 0.12) g *= 0.75;
         col = g * (1.0 + flash * 2.2 * (1.0 - d * 0.6));
-        if (sprites) col = pumpkinPools(col, cell, grid, T, dth);
-        if (sprites) col = drawZombies(col, cell, grid, T, tick, flash, horizonY);
+        [branch] if (sprites) col = pumpkinPools(col, cell, grid, T, dth);
     }
     // --- ground fog drifting across, thick at the horizon and thinning towards you ---
     float fy = (c.y - (horizonY - 10.0)) / max(grid.y - horizonY, 1.0);
-    if (fy > -0.2)
+    float fog = 0.0;
+    [branch] if (fy > -0.2)
     {
         float fd = saturate(1.0 - abs(fy - 0.12) / 0.55);
         float drift = 0.55 + 0.45 * sin(c.x * 0.025 + T * loopRate(0.25) + c.y * 0.2) * sin(c.x * 0.011 - T * loopRate(0.13));
-        col = lerp(col, FOG_COLOUR * (1.0 + flash * 2.5), steps(fd * fd * drift * FOG_AMOUNT, 5.0, dth));
+        fog = steps(fd * fd * drift * FOG_AMOUNT, 5.0, dth);
+        col = lerp(col, FOG_COLOUR * (1.0 + flash * 2.5), fog);
     }
 
-    if (sprites)
+    [branch] if (sprites)
     {
-        col = drawGhost(col, cell, grid, T, ghostA, flash, dth);
-        col = drawPumpkins(col, cell, grid, T, flash);
+        float zFeet;
+        col = drawZombies(col, cell, grid, T, tick, flash, horizonY, zFeet);
+        col = drawHut(col, cell, grid, T, flash, fog, horizonY, zFeet, dth);
+        col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
+        col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
+    }
+
+    // --- before and during the ghost's visit the upper part of the night darkens ---
+    float reach = steps(saturate(1.0 - c.y / (grid.y * DIM_REACH)), 6.0, dth);
+    col *= 1.0 - DIM_AMOUNT * dim * reach * (1.0 - 0.85 * flash);
+
+    col = drawGhost(col, cell, grid, T, ghostA, flash, dth);
+    [branch] if (sprites)
+    {
+        col = drawPumpkins(col, cell, grid, T, tick, flash);
         col = drawHangers(col, cell, grid, T, tick, flash);
         col = drawCrawlers(col, cell, grid, T, tick, flash);
     }
-    else col = drawGhost(col, cell, grid, T, ghostA, flash, dth);
 
-    // dark corners, in dithered steps so it stays pixel-art
-    float2 e = c / grid - 0.5;
-    col *= 1.0 - EDGE_DARK * steps(saturate(dot(e, e) * 2.2), 5.0, dth);
+    // the picture fades to black at every edge, in dithered steps so it stays pixel-art
+    float2 u = c / grid;
+    float2 edge = min(u, 1.0 - u) / float2(EDGE_FADE * grid.y / grid.x, EDGE_FADE);
+    col *= steps(smoothstep(0.0, 1.0, saturate(min(edge.x, edge.y))), 8.0, dth);
     col = saturate(col * SCENE_BRIGHT);
 
     // letters on top, crisp; the picture fades out underneath them so they stay readable
