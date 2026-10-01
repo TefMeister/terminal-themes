@@ -41,6 +41,9 @@ static const int    GW = 16, GH = 22, G_Y = 816;      // gravestones: 4 kinds
 static const int    BPW = 96, BPH = 80, BIG_Y = 838;  // big turned pumpkins: 3 rows x 4 flame frames, drawn twice as fine
 static const int    BTW = 160, BTH = 200, BT_Y = 1078; // big trees: 2 kinds
 // branch points spiders hang from, 4 per big tree drawing (sheet pixels; printed by halloween-sprites.py)
+// the highest branch a raven sits on, per big tree drawing
+static const float2 BT_PERCH[2]    = { float2(107.4, 50.2), float2(78.1, 83.7) };
+static const int    RAVEN_X = 320, RAVEN_W = 16, RAVEN_H = 12;   // at BT_Y: 4 flying frames, then a row of 2 sitting
 static const float2 BT_ANCHOR[8]   = { float2(75.3, 168.7), float2(46.5, 151.4), float2(111.5, 145.6), float2(130.9, 99.5),
                                        float2(68.2, 131.5), float2(112.8, 167.6), float2(48.3, 164.5), float2(88.5, 172.2) };
 
@@ -95,7 +98,8 @@ static const float3 FOG_COLOUR     = float3(0.170, 0.130, 0.210);
 static const float  FOG_AMOUNT     = 0.85;
 
 // --- big trees standing in the field, between you and the hut ---
-// listed by depth; zombies, the ghost and the hut pass behind or in front of each one
+// listed back to front (FT_DEPTH rising, all deeper than HUT_DEPTH); zombies and the ghost pass
+// behind or in front of each one
 static const int    FG_TREES       = 3;
 static const float  FT_X[3]        = { 0.45, 0.71, 0.27 };   // trunk, across the width
 static const float  FT_DEPTH[3]    = { 0.16, 0.36, 0.55 };   // where it stands in the field (0 horizon, 1 bottom)
@@ -106,6 +110,7 @@ static const float  TREE_HAZE      = 0.35;   // further trees melt a little into
 static const float  TREE_BARK      = 1.0;    // how much bark a lightning flash shows
 static const float  LEAF_AMBIENT   = 0.35;   // the few leaves keep a little colour in the dark
 // lanterns hanging from the lower branches, swinging a little, lighting the trunk and passing spiders
+static const int    LANTERN_COUNT[3]  = { 1, 1, 2 };      // per big tree: one far, one mid, two close
 static const int    LANTERN_ANCHOR[4] = { 1, 2, 0, 2 };   // which branch points (BT_ANCHOR) carry one: 2 per drawing
 static const float  LANTERN_CORD   = 7.0;    // cord length, in tree pixels
 static const float  LANTERN_SWING  = 0.14;   // how far they swing (radians)
@@ -114,6 +119,15 @@ static const float  LANTERN_REACH  = 38.0;   // how far the light reaches, in tr
 static const float  LANTERN_BARK   = 1.6;    // how strongly it lights the bark
 static const float  LANTERN_HALO   = 0.20;   // the glow in the air round it
 static const float  LANTERN_SPIDER = 1.5;    // how strongly it lights a spider going past
+
+// --- ravens: one on top of each big tree. The first lightning strike startles them into the air;
+// once the strikes have stopped they fly back and land on the same branch ---
+static const float  RAVEN_SIZE     = 0.85;   // relative to its tree
+static const float  RAVEN_STARTLE  = 0.35;   // most seconds before one reacts to the first strike
+static const float  RAVEN_FLEE     = 4.0;    // seconds to fly out of sight
+static const float  RAVEN_WAIT     = 2.5;    // seconds after the last strike before they come back
+static const float  RAVEN_RETURN   = 6.0;    // seconds to fly back and land
+static const float  RAVEN_FLAP     = 8.0;    // wing beat frames per second
 
 // --- purple flowers in the grass ---
 static const int    FLOWER_PATCHES = 18;     // the first ones grow round the big trees and the hut
@@ -429,6 +443,18 @@ float2 bolts(float2 c, float t, float n, float s1, float2 grid, float horizonY, 
 // the big trees, the flowers and the spiders that hang from the branches
 #include "halloween-trees.hlsli"
 
+// the ghost and the zombie, laid over the scene if they stand in the depth gap (lo, hi]; if both
+// do, the further one goes on first
+float3 movers(float3 col, float lo, float hi, float zAt, float3 zCol, float gAt, float gM, float3 gK)
+{
+    bool z = zAt > lo && zAt <= hi;
+    bool g = gAt > lo && gAt <= hi;
+    if (g && z && gAt > zAt) return zCol * gM + gK;
+    if (g) col = col * gM + gK;
+    if (z) col = zCol;
+    return col;
+}
+
 // ---------------------------------------------------------------- the whole picture
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
@@ -471,6 +497,15 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
                            GHOST_Y[spot] * grid.y);
     float gSize = GHOST_SIZE[spot] * grid.y;
     bool gLeft = GHOST_X1[spot] < GHOST_X0[spot];
+    float lastStrike = s1, st = s1;
+    [loop] for (int si = 0; si < STRIKES; si++)
+    {
+        st = nextStrike(n, si, st);
+        if (st > s1 + GHOST_STAY) break;
+        lastStrike = st;
+    }
+    float3 gK;
+    float gM = ghostLayer(cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift, gK);
 
     // --- sky ---
     float v = c.y / max(horizonY, 1.0);
@@ -519,7 +554,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float hf = hillFar(c.x, grid), hn = hillNear(c.x, grid);
     if (c.y >= hf) col = HILL_FAR * (1.0 + steps(saturate((c.y - hf) / 20.0), 3.0, dth) * -0.3) + FLASH_SKY * flash * HILL_FAR_FLASH * 0.5;
     // a far-off ghost: the trees, gravestones and near hill all stand in front of it
-    if (gDepth < 0.0) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
+    if (gDepth < 0.0) col = col * gM + gK;
     [branch] if (sprites) col = drawYard(col, cell, grid, flash);
     if (c.y >= hn && c.y < horizonY) col = HILL_NEAR + FLASH_SKY * flash * HILL_NEAR_FLASH * 0.4;
     [branch] if (sprites) col = drawHillPumpkins(col, cell, grid, T, tick, flash, dth);
@@ -550,44 +585,36 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     [branch] if (sprites)
     {
-        // everything standing in the field, drawn back to front by where it meets the ground:
-        // 0 the hut, 1 the ghost, 2 the nearest zombie here, 3.. the big trees (with their spiders)
+        // everything standing in the field, drawn back to front by where it meets the ground. The hut
+        // and the big trees never move (and stand in that order, HUT_DEPTH before every FT_DEPTH), so
+        // only the ghost and the nearest zombie here are slotted into the gaps between them.
         float zFeet;
         float3 zCol = drawZombies(col, cell, grid, T, tick, flash, horizonY, zFeet);
+        float zAt = zFeet >= 0.0 ? zFeet : -1e9;
+        float gAt = gDepth >= 0.0 && ghostA > 0.0 ? gBase : -1e9;
         float2 hAt; float hSc, hBase;
         hutPlace(grid, horizonY, hAt, hSc, hBase);
-        float lastBase = -1e9;
-        int lastId = -1;
-        [loop] for (int step = 0; step < 3 + FG_TREES; step++)
+        col = movers(col, -1e8, hBase, zAt, zCol, gAt, gM, gK);
+        col = drawHut(col, cell, grid, T, flash, fog, horizonY, -1.0, dth);
+        col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
+        col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
+        float lo = hBase;
+        [loop] for (int i = 0; i < FG_TREES; i++)
         {
-            int id = -1;
-            float base = 1e9;
-            [loop] for (int i = 0; i < 3 + FG_TREES; i++)
-            {
-                float b = i == 0 ? hBase : (i == 1 ? (gDepth >= 0.0 && ghostA > 0.0 ? gBase : -2e9)
-                        : (i == 2 ? (zFeet >= 0.0 ? zFeet : -2e9) : treeBase(max(i - 3, 0), grid, horizonY)));
-                bool later = b > lastBase || (b == lastBase && i > lastId);
-                if (b > -1e9 && later && (b < base || (b == base && i < id))) { base = b; id = i; }
-            }
-            if (id < 0) break;
-            lastBase = base; lastId = id;
-            if (id == 0)
-            {
-                col = drawHut(col, cell, grid, T, flash, fog, horizonY, -1.0, dth);
-                col = drawSmoke(col, cell, grid, T, flash, horizonY, dth);
-                col = drawPorchPumpkins(col, cell, grid, T, tick, flash, horizonY, dth);
-            }
-            else if (id == 1) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
-            else if (id == 2) col = zCol;
-            else
-            {
-                col = drawBigTree(col, cell, grid, horizonY, id - 3, flash, T);
-                col = drawLanterns(col, cell, grid, T, id - 3, horizonY, dth);
-                col = drawTreeHangers(col, cell, grid, T, tick, flash, horizonY, id - 3);
-            }
+            float hi = treeBase(i, grid, horizonY);
+            col = movers(col, lo, hi, zAt, zCol, gAt, gM, gK);
+            float2 tAt; float tSc, tBase;
+            treePlace(i, grid, horizonY, tAt, tSc, tBase);
+            float3 L = lanternLight(float2(cell) + 0.5, i, T, tAt, tSc);
+            col = drawBigTree(col, cell, grid, horizonY, i, flash, L);
+            col = drawLanterns(col, cell, grid, T, i, horizonY, dth);
+            col = drawTreeHangers(col, cell, grid, T, tick, flash, horizonY, i, L);
+            col = drawRaven(col, cell, grid, T, flash, i, tAt, tSc, n, gt, s1, lastStrike);
+            lo = hi;
         }
+        col = movers(col, lo, 1e9, zAt, zCol, gAt, gM, gK);
     }
-    else if (gDepth >= 0.0) col = drawGhost(col, cell, grid, T, ghostA, flash, dth, gCrown, gSize, gLeft, lift);
+    else if (gDepth >= 0.0) col = col * gM + gK;
 
     // --- before and during the ghost's visit the upper part of the night darkens ---
     col *= dimMul;

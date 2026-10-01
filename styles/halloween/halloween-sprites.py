@@ -5,6 +5,7 @@ Layout (must match the constants in halloween.hlsl; the script prints them):
   hut           1,                    HUTW x HUTH, to the right of the pumpkins
   big pumpkins  3 x 4 frames,         BPW x BPH, at the bottom: turned to look left, drawn twice as fine
   big trees     2 kinds,              BTW x BTH, at the very bottom (drawn in halloween-trees.py)
+  ravens        4 flying + 2 sitting, 16 x 12, right of the big trees (flying row, then sitting row)
   zombies       12 rows x 8 frames,   ZW x ZH, row = (view * 2 + arms) * 2 + outfit; view 0 towards you,
                                       1 at 45 degrees, 2 side on (all walking right); arms 0 out, 1 hanging
   witch         4 frames,             WW x WH (a silhouette mask, facing right)
@@ -60,6 +61,7 @@ BIG_Y = G_Y + GH
 SHEET_W = max(HUT_X + HUTW, 4 * BPW)
 BTW, BTH = TREE_ART.BTW, TREE_ART.BTH
 BT_Y = BIG_Y + 3 * BPH
+RAVEN_X = TREE_ART.KINDS * BTW                # ravens sit to the right of the big trees
 SHEET_H = BT_Y + BTH
 
 
@@ -679,13 +681,24 @@ def main():
         draw_tree(f).blit(img, f * TW, T_Y)
     for k in range(4):
         draw_tomb(k).blit(img, k * GW, G_Y)
-    anchors = []
+    anchors, perches = [], []
     for k in range(TREE_ART.KINDS):
-        px, a = TREE_ART.draw_tree(k)
+        px, a, perch = TREE_ART.draw_tree(k)
         for (x, y), col in px.items():
             img.putpixel((k * BTW + x, BT_Y + y), col)
         anchors += a
+        perches.append(perch)
     print("BT_ANCHOR = { " + ", ".join(f"float2({x}, {y})" for x, y in anchors) + " }")
+    print("BT_PERCH = { " + ", ".join(f"float2({x}, {y})" for x, y in perches) + " }")
+    # ravens: beside the trees, flying frames in one row, sitting frames in the next
+    rw, rh = TREE_ART.RAVEN_W, TREE_ART.RAVEN_H
+    for f in range(TREE_ART.RAVEN_FLY_FRAMES):
+        for (x, y), col in TREE_ART.draw_raven(f, False).items():
+            img.putpixel((RAVEN_X + f * rw + x, BT_Y + y), col)
+    for f in range(TREE_ART.RAVEN_SIT_FRAMES):
+        for (x, y), col in TREE_ART.draw_raven(f, True).items():
+            img.putpixel((RAVEN_X + f * rw + x, BT_Y + rh + y), col)
+    print(f"RAVEN_X={RAVEN_X} RAVEN_Y={BT_Y}")
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "halloween-sheet.png")
     img.save(out)
     print("wrote", out, img.size)

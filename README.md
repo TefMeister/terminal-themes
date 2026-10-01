@@ -59,8 +59,10 @@ the window glow drifts from green to purple, pink and teal, and now and then som
 quick purple or pink flashes that light up the hut, while the chimney smoke takes the same colour.
 
 Big gnarled trees stand in the field, mostly bare with a few dark green, yellow and red leaves
-left, black against the night until lightning shows their bark, with lanterns swinging gently from
-their lower branches that light the trunks and any spider dropping past; purple flowers grow round their
+left, black against the night until lightning shows their bark, with a few lanterns swinging gently from
+their lower branches that light the trunks and any spider dropping past, and a raven on top of each
+that the first lightning strike scares into the air, and that comes back to the same branch once the
+storm has passed; purple flowers grow round their
 roots and across the grass. Zombies cross the field, passing behind and in front of the trees, each
 with its own walk: some come straight at you, some at an angle, some shuffle sideways across the
 field, some with arms held out in front and some with arms hanging and swinging, with a slight sway. Candle-lit jack-o'-lanterns stand

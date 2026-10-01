@@ -45,14 +45,18 @@ bool inGhost(float2 p, float T, out float lit)
 
 // the ghost, its crown at `at` and `h` cells tall. `left`: it drifts to the left, so its sheet trails
 // out to the right. `lift` brightens it to cancel the darkening that is applied after it is drawn.
-float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float flash, float dth,
-                 float2 at, float h, bool left, float lift)
+// It is worked out once per pixel and then laid over the scene wherever its depth puts it: the
+// result is how much of what is behind still shows (m), and k, the ghost's own light, so that
+// the scene with the ghost on it = behind * m + k.
+float ghostLayer(int2 cell, float2 grid, float T, float alpha, float flash, float dth,
+                 float2 at, float h, bool left, float lift, out float3 k)
 {
-    if (alpha <= 0.0) return col;
+    k = 0;
+    if (alpha <= 0.0) return 1.0;
     float2 crown = at + float2(sin(T * loopRate(0.31)) * h * GHOST_DRIFT_SWAY, sin(T * loopRate(0.9)) * h * 0.015);
     float2 p = (float2(cell) + 0.5 - crown) / h;
     if (left) p.x = -p.x;
-    if (p.x < -0.75 || p.x > 0.45 || p.y < -0.05 || p.y > 1.15) return col;
+    if (p.x < -0.75 || p.x > 0.45 || p.y < -0.05 || p.y > 1.15) return 1.0;
     // one pass over this cell and its four neighbours (to find the outline), so the shape is only
     // written out once; if the cell is outside, the last pass tests the aura instead
     float px = 1.0 / h;
@@ -71,11 +75,11 @@ float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float
     if (!inside)
     {
         // a faint cold aura just outside the cloth
-        if (aura && dth < alpha * 0.6) col += float3(0.05, 0.06, 0.10) * (1.0 + flash) * lift;
-        return col;
+        if (aura && dth < alpha * 0.6) k = float3(0.05, 0.06, 0.10) * (1.0 + flash) * lift;
+        return 1.0;
     }
     // appear and vanish as a dissolve, not a fade, to keep it pixel-art
-    if (dth > alpha) return col;
+    if (dth > alpha) return 1.0;
     float3 g = lerp(GHOST_SHADE, GHOST_LIGHT, steps(lit, 5.0, dth * 0.3));
     if (edge) g = GHOST_EDGE;
     // the two eye holes, leaning with the head
@@ -88,7 +92,8 @@ float3 drawGhost(float3 col, int2 cell, float2 grid, float T, float alpha, float
         if ((q.x * q.x) / (0.048 * 0.048) + (q.y * q.y) / (0.075 * 0.075) < 1.0) g = GHOST_EYE;
     }
     g *= (1.0 + flash * 0.4) * lift;
-    return lerp(col, g, GHOST_OPACITY);
+    k = g * GHOST_OPACITY;
+    return 1.0 - GHOST_OPACITY;
 }
 
 // ---------------------------------------------------------------- the rest of the cast
