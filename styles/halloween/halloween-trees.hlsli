@@ -28,7 +28,7 @@ void lanternAt(int i, int j, float T, float2 at, float sc, out float2 pos, out f
 float3 lanternLight(float2 c, int i, float T, float2 at, float sc)
 {
     float3 L = 0;
-    [loop] for (int j = 0; j < 2; j++)
+    [loop] for (int j = 0; j < LANTERN_COUNT[i]; j++)
     {
         float2 pos, down; float fl;
         lanternAt(i, j, T, at, sc, pos, down, fl);
@@ -40,11 +40,11 @@ float3 lanternLight(float2 c, int i, float T, float2 at, float sc)
 
 // one big tree: a black shape with a moonlit edge in the dark; a lightning flash shows its bark, and
 // the lanterns light it warmly close by. Its few leaves keep a little of their colour even in the dark.
-float3 drawBigTree(float3 col, int2 cell, float2 grid, float horizonY, int i, float flash, float T)
+// L is the lantern light on this cell (lanternLight)
+float3 drawBigTree(float3 col, int2 cell, float2 grid, float horizonY, int i, float flash, float3 L)
 {
     float2 at; float sc, base;
     treePlace(i, grid, horizonY, at, sc, base);
-    float3 L = lanternLight(float2(cell) + 0.5, i, T, at, sc);
     bool mirror = FT_MIRROR[i] != 0;
     int sx = FT_KIND[i] * BTW;
     float4 t = sprite(cell, at, sc, sx, BT_Y, BTW, BTH, mirror);
@@ -66,7 +66,7 @@ float3 drawLanterns(float3 col, int2 cell, float2 grid, float T, int i, float ho
     float2 at; float sc, base;
     treePlace(i, grid, horizonY, at, sc, base);
     float2 c = float2(cell) + 0.5;
-    [loop] for (int j = 0; j < 2; j++)
+    [loop] for (int j = 0; j < LANTERN_COUNT[i]; j++)
     {
         float2 pos, down; float fl;
         lanternAt(i, j, T, at, sc, pos, down, fl);
@@ -90,7 +90,7 @@ float3 drawLanterns(float3 col, int2 cell, float2 grid, float T, int i, float ho
 // spiders letting themselves down on a thread from the big trees' branches: a quick drop with a
 // bounce, a slow swing, then the climb back up. Each drop picks a tree and a branch; the spider and
 // its thread are as big as that tree is near, and they hang in front of it.
-float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, float flash, float horizonY, int tree)
+float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, float flash, float horizonY, int tree, float3 L)
 {
     float2 c = float2(cell) + 0.5;
     float2 at; float sc, base;
@@ -105,7 +105,7 @@ float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, fl
         if (pmod((int)(hash(n * 1.3) * 2.99 + fk), FG_TREES) != tree) continue;
         int ai = (int)(hash(n * 4.1) * 3.99);
         float2 anchor = BT_ANCHOR[FT_KIND[tree] * 4 + ai];
-        if (ai == LANTERN_ANCHOR[FT_KIND[tree] * 2] || ai == LANTERN_ANCHOR[FT_KIND[tree] * 2 + 1])
+        if (ai == LANTERN_ANCHOR[FT_KIND[tree] * 2] || (LANTERN_COUNT[tree] > 1 && ai == LANTERN_ANCHOR[FT_KIND[tree] * 2 + 1]))
             anchor.x += 7.0;                                        // drop beside the lantern, not through it
         if (mirror) anchor.x = BTW - anchor.x;
         float2 top = at + anchor * sc;
@@ -121,12 +121,63 @@ float3 drawTreeHangers(float3 col, int2 cell, float2 grid, float T, int tick, fl
         float2 body = top + down * l;
         float2 pa = c - top;
         float h = saturate(dot(pa, down) / max(l, 1.0));
-        float3 L = lanternLight(c, tree, T, at, sc);
         if (length(pa - down * h * l) < 0.55 && h < 1.0) col = lerp(col, THREAD_COLOUR * (1.0 + flash + L * 2.0), 0.7);
         float4 s = spriteTurned(cell, body, down, float2(12.0, 1.0), sc * HANG_SCALE, (pmod(tick / 2 + k, 2)) * HW, H_Y, HW, HH);
         if (s.w > 0) col = s.rgb * (0.9 - flash * 0.6 + L * LANTERN_SPIDER);   // lit up passing a lantern
     }
     return col;
+}
+
+// the raven on top of big tree i. It sits on its branch, now and then looking round. The visit's first
+// lightning strike startles it into the air: it flaps up and away out of sight, and once the strikes
+// have stopped it comes back the same way and lands on the same branch.
+float3 drawRaven(float3 col, int2 cell, float2 grid, float T, float flash, int i, float2 at, float sc,
+                 float n, float gt, float s1, float lastStrike)
+{
+    float2 perch = BT_PERCH[FT_KIND[i]];
+    if (FT_MIRROR[i] != 0) perch.x = BTW - perch.x;
+    float2 home = at + perch * sc;                                  // where its feet grip the branch
+    float fi = (float)i;
+    float away = hash(fi * 3.3 + 1.0) < 0.5 ? -1.0 : 1.0;           // which way it flees
+    float tGo = s1 + hash(n * 1.7 + fi) * RAVEN_STARTLE;
+    float tBack = lastStrike + RAVEN_WAIT + hash(n * 2.9 + fi) * 1.5;
+    float u = 0.0;                                                  // 0 on the branch .. 1 out of sight
+    bool leaving = false;
+    if (gt > tGo && gt < tGo + RAVEN_FLEE) { u = (gt - tGo) / RAVEN_FLEE; leaving = true; }
+    else if (gt >= tGo + RAVEN_FLEE && gt < tBack) u = 1.0;
+    else if (gt >= tBack && gt < tBack + RAVEN_RETURN) u = 1.0 - (gt - tBack) / RAVEN_RETURN;
+    if (u >= 1.0) return col;
+    float rs = sc * RAVEN_SIZE;
+    float2 pos = home;
+    bool sitting = u <= 0.0;
+    bool faceRight = away > 0.0;
+    int sx, sy;
+    if (sitting)
+    {
+        int look = hash(floor(T * 0.4) * 1.3 + fi * 7.0) > 0.75 ? 1 : 0;   // looking round now and then
+        sx = RAVEN_X + look * RAVEN_W;
+        sy = BT_Y + RAVEN_H;
+        pos -= float2(RAVEN_W * 0.5, RAVEN_H) * rs;
+        faceRight = hash(fi * 5.1) < 0.5;
+    }
+    else
+    {
+        // up and away in a widening curve; coming back it follows the same curve the other way round
+        float e = u * u;
+        pos += float2(away * (e * 1.3 + u * 0.15) * grid.x * 0.55, -(u * 0.8 + e * 0.5) * grid.y * 0.45)
+             + float2(0.0, sin(T * 9.0 + fi) * 1.2 * rs);
+        if (!leaving) faceRight = !faceRight;
+        int frame = u < 0.04 ? 1 : pmod((int)floor(T * RAVEN_FLAP + fi), 4);   // a glide just before touching down
+        sx = RAVEN_X + frame * RAVEN_W;
+        sy = BT_Y;
+        pos -= float2(RAVEN_W * 0.5, RAVEN_H * 0.6) * rs;
+    }
+    float2 l = (float2(cell) - pos) / rs;
+    if (l.x < 0 || l.y < 0 || l.x >= RAVEN_W || l.y >= RAVEN_H) return col;
+    int x = faceRight ? (int)l.x : RAVEN_W - 1 - (int)l.x;
+    float4 t = texel(sx + x, sy + (int)l.y);
+    if (t.w == 0) return col;
+    return SILHOUETTE + t.rgb * (0.35 + flash * 0.8);               // black birds, a sheen in the flashes
 }
 
 // little purple flowers in clumps on the field: the first few round the big trees and by the hut,

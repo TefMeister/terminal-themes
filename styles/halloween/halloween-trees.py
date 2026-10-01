@@ -4,7 +4,8 @@ Each tree is a trunk with root flare and branches that fork and twist as they th
 bark (grooves, knots, a little moss) that the shader only shows when lightning strikes; in the dark the
 tree is a black shape with a moonlit edge. A few leaves cling on: dark green, yellow and red, mostly at
 the tips, mostly bare. Leaves carry blue 5 so the shader can tell them from bark.
-The script also picks branch points that spiders can hang from (ANCHORS, printed for the shader).
+The script also picks branch points that spiders can hang from (ANCHORS), and the highest branch a
+raven can sit on (PERCH), both printed for the shader. The ravens are drawn here too.
 """
 import math
 import random
@@ -41,13 +42,13 @@ def _bark(x, y, along, rnd_seed):
 
 
 def draw_tree(kind):
-    """Returns ({(x, y): colour}, anchors) for one big tree; the trunk stands on the bottom row.
+    """Returns ({(x, y): colour}, anchors, perch) for one big tree; the trunk stands on the bottom row.
     The tree is grown smaller and smaller until no branch runs off the edge of its drawing."""
     size = 1.0
     while True:
-        px, anchors, fits = _grow(kind, size)
+        px, anchors, perch, fits = _grow(kind, size)
         if fits:
-            return px, anchors
+            return px, anchors, perch
         size *= 0.93
         if size < 0.2:
             raise RuntimeError("tree %d never fits its drawing" % kind)
@@ -134,4 +135,65 @@ def _grow(kind, size):
             break
     while len(anchors) < ANCHORS_PER_TREE:            # never short: fall back to the trunk's top
         anchors.append((round(cx, 1), round(BTH - 6 - trunk_h, 1)))
-    return px, anchors, fits
+    # the perch: the top end of the highest limb still thick enough to hold a bird
+    top = min((s for s in segs if s[4] >= 1.8), key=lambda s: min(s[1], s[3]))
+    perch = (round(top[0] if top[1] < top[3] else top[2], 1), round(min(top[1], top[3]) - top[4] / 2, 1))
+    return px, anchors, perch, fits
+
+
+# ---------------------------------------------------------------- ravens
+
+RAVEN_W, RAVEN_H = 16, 12
+RAVEN_FLY_FRAMES = 4                # wings up, level, down, level
+RAVEN_SIT_FRAMES = 2                # sitting still, and looking round
+RAVEN = (30, 30, 42)                # nearly black with a blue-purple sheen
+RAVEN_SHEEN = (62, 64, 92)
+RAVEN_BEAK = (44, 44, 50)
+
+
+def _disc(px, cx, cy, rx, ry, col, sheen=True):
+    for y in range(RAVEN_H):
+        for x in range(RAVEN_W):
+            dx, dy = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
+            if dx * dx + dy * dy <= 1.0:
+                px[(x, y)] = RAVEN_SHEEN if sheen and dy < -0.45 else col
+
+
+def _line(px, x0, y0, x1, y1, col, w=1.0):
+    n = int(max(abs(x1 - x0), abs(y1 - y0)) * 3) + 1
+    for i in range(n + 1):
+        t = i / n
+        x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+        for dx in (0.0, w - 1.0) if w > 1 else (0.0,):
+            X, Y = int(x + dx), int(y)
+            if 0 <= X < RAVEN_W and 0 <= Y < RAVEN_H:
+                px[(X, Y)] = col
+
+
+def draw_raven(frame, sitting):
+    """A raven facing right, as a {(x, y): colour} dict. Sitting: perched, feet on the bottom row;
+    frame 1 looks round. Flying: frame 0..3 is the wing beat."""
+    px = {}
+    if sitting:
+        _disc(px, 7.0, 7.0, 4.4, 3.0, RAVEN)                     # body
+        _line(px, 3.5, 8.0, 0.5, 10.5, RAVEN, 2)                  # tail, angled down
+        _line(px, 2.8, 8.5, 0.8, 11.0, RAVEN)
+        hx, hy = (11.0, 4.0) if frame == 0 else (10.5, 3.5)
+        _disc(px, hx, hy, 2.3, 2.1, RAVEN)                        # head
+        if frame == 0:
+            _line(px, hx + 2.0, hy + 0.2, hx + 4.4, hy + 0.8, RAVEN_BEAK, 2)   # beak forward
+        else:
+            _line(px, hx - 1.8, hy + 0.2, hx - 4.0, hy - 0.6, RAVEN_BEAK)       # looking back over its shoulder
+        px[(int(hx + 0.7), int(hy - 0.5))] = (90, 80, 70)        # a glint in the eye
+        for x in (6, 8):
+            _line(px, x, 9.5, x, 11.5, RAVEN_BEAK)                # legs gripping the branch
+    else:
+        _disc(px, 8.0, 6.2, 4.6, 1.7, RAVEN)                     # body, stretched out
+        _disc(px, 12.6, 5.6, 1.8, 1.6, RAVEN)                    # head
+        _line(px, 14.0, 5.8, 15.8, 6.2, RAVEN_BEAK)               # beak
+        for dy in (-1.2, 0.0, 1.2):
+            _line(px, 3.8, 6.2, 0.6, 6.2 + dy, RAVEN)             # tail fan
+        lift = [-5.0, -1.0, 4.0, -1.0][frame]                     # wing beat
+        for k in range(3):
+            _line(px, 9.0 - k, 5.6, 6.0 - k * 1.5, 5.6 + lift * (1.0 - k * 0.15), RAVEN, 2)
+    return {p: c for p, c in px.items() if 0 <= p[0] < RAVEN_W and 0 <= p[1] < RAVEN_H}
