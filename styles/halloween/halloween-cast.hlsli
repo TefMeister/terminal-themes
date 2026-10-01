@@ -446,10 +446,16 @@ float3 drawCrawlers(float3 col, int2 cell, float2 grid, float T, int tick, float
 {
     [loop] for (int k = 0; k < CRAWLERS; k++)
     {
-        bool on, was;
-        float2 pos = crawlerPos(k, T, grid, on);
+        bool on = false;
+        float2 pos = 0, before = 0;
+        [loop] for (int w = 0; w < 2; w++)                         // now, and a moment ago (for its heading)
+        {
+            bool o;
+            float2 q = crawlerPos(k, T - 0.1 * w, grid, o);
+            if (w == 0) { pos = q; on = o; } else before = q;
+        }
         if (!on) continue;
-        float2 dir = normalize(pos - crawlerPos(k, T - 0.1, grid, was) + float2(0.0, -1e-4));
+        float2 dir = normalize(pos - before + float2(0.0, -1e-4));
         int frame = pmod(tick * 2 + k, 4);                         // quick little legs
         float4 s = spriteTurned(cell, pos, -dir, float2(20.0, 22.0), CRAWL_SCALE, frame * SW, S_Y, SW, SH);
         // lit from behind by the scene, so mostly dark; a flash turns it into a black shape
@@ -491,26 +497,16 @@ float3 drawPumpkinSpiders(float3 col, int2 cell, float2 grid, float T, int tick,
         // in from the ground beside the pumpkin, up its side to the corner of the mouth, and in
         float2 from = float2(-14.0, 78.0), bend = float2(mouth.x - 16.0, mouth.y + 6.0);
         float2 up = float2(eye.x + 20.0, eye.y - 26.0), away = float2(112.0, 20.0);
-        if (a < tIn)
-            at = bezier(from, bend, mouth, smoothstep(0.0, 1.0, a / tIn) * 0.6 + a / tIn * 0.4, dir);
-        else if (a < tSq)
-        {
-            float q = (a - tIn) / PKSP_SQUEEZE;
-            at = lerp(mouth, mouthIn, q);
-            dir = normalize(mouthIn - mouth + float2(1e-4, 0.0));
-            size = 1.0 - q;                                          // squeezing in past the edge
-        }
+        // each stretch is a curve p0 -> p1 -> p2 (a straight squeeze is a curve with its middle halfway)
+        float2 p0 = 0, p1 = 0, p2 = 0;
+        float u = 0.0;
+        if (a < tIn)              { p0 = from; p1 = bend; p2 = mouth; u = smoothstep(0.0, 1.0, a / tIn) * 0.6 + a / tIn * 0.4; }
+        else if (a < tSq)         { p0 = mouth; p1 = (mouth + mouthIn) * 0.5; p2 = mouthIn; u = (a - tIn) / PKSP_SQUEEZE; size = 1.0 - u; }  // squeezing in past the edge
         else if (a < tOut) continue;                                // inside the pumpkin
-        else if (a < tOut2)
-        {
-            float q = (a - tOut) / PKSP_SQUEEZE;
-            at = lerp(eyeIn, eye, q);
-            dir = normalize(eye - eyeIn + float2(1e-4, 0.0));
-            size = q;                                                // climbing out over the rim
-        }
-        else if (a < tOut2 + PKSP_WALK_OUT)
-            at = bezier(eye, up, away, (a - tOut2) / PKSP_WALK_OUT, dir);
+        else if (a < tOut2)       { p0 = eyeIn; p1 = (eyeIn + eye) * 0.5; p2 = eye; u = (a - tOut) / PKSP_SQUEEZE; size = u; }          // climbing out over the rim
+        else if (a < tOut2 + PKSP_WALK_OUT) { p0 = eye; p1 = up; p2 = away; u = (a - tOut2) / PKSP_WALK_OUT; }
         else continue;
+        at = bezier(p0, p1, p2, u, dir);
         // onto the screen: the left group is mirrored so their faces look right
         float2 foot; float sc;
         pumpkinPlace(k, grid, foot, sc);
