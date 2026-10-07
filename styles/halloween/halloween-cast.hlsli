@@ -311,15 +311,20 @@ float windowFlicker(float T)
     return 0.85 + 0.15 * sin(T * loopRate(2.3)) * sin(T * loopRate(0.7) + 1.0);
 }
 
-// the potion brewing inside: drifting slowly from one colour to the next, bubbling as it goes
-float3 brewColour(float T)
+// the colour the potion has at time T, drifting slowly from one to the next (no bubbling or flicker)
+float3 brewBase(float T)
 {
     float f = loopFreq(1.0 / (BREW_CHANGE * 4.0)) * 4.0;          // the whole round of four colours fits the loop
     float p = T * f;
     int i = pmod((int)floor(p), 4);
-    float3 c = lerp(BREW_COLOURS[i], BREW_COLOURS[(i + 1) % 4], smoothstep(0.6, 1.0, frac(p)));
+    return lerp(BREW_COLOURS[i], BREW_COLOURS[(i + 1) % 4], smoothstep(0.6, 1.0, frac(p)));
+}
+
+// the potion brewing inside, as the window shows it: that colour, bubbling and flickering
+float3 brewColour(float T)
+{
     float bubble = 0.85 + 0.15 * noise1w(T * 6.0, loopSpan(6.0)) * noise1w(T * 2.0 + 4.0, loopSpan(2.0));
-    return c * bubble * windowFlicker(T);
+    return brewBase(T) * bubble * windowFlicker(T);
 }
 
 // a bang in the hut at time t: rgb its colour, a how bright it is now. `smoke` instead asks how much
@@ -389,8 +394,11 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float h = (top.y - c.y) / (SMOKE_HEIGHT * sc);      // 0 at the chimney, 1 where it is gone
     if (h < -0.05 || h > 1.0) return col;
     // the smoke here left the chimney this long ago (the lumps climb 32 * SMOKE_RISE hut pixels a second);
-    // smoke that left just after a bang carries the bang's colour, and billows out a little more
-    float4 tint = burstAt(T - h * SMOKE_HEIGHT / (32.0 * SMOKE_RISE), true);
+    // it carries the colour the window had at that moment, so the puffs match the brew, and smoke
+    // that left just after a bang carries the bang's colour instead, and billows out a little more
+    float age = h * SMOKE_HEIGHT / (32.0 * SMOKE_RISE);
+    float3 brew = lerp(SMOKE_COLOUR, brewBase(T - age), SMOKE_BREW);
+    float4 tint = burstAt(T - age, true);
     float mid = top.x - h * h * h * 70.0 * sc;
     float halfw = (2.5 + h * 10.0) * sc * (1.0 + 0.4 * tint.a);
     float across = abs(c.x - mid) / halfw;
@@ -399,7 +407,7 @@ float3 drawSmoke(float3 col, int2 cell, float2 grid, float T, float flash, float
     float lumps = noise2w(float2(c.x / (4.0 * sc), (c.y / (4.0 * sc)) + T * rise), float2(1e5, loopSpan(rise)));
     float dens = ((1.0 - across) * 1.3 + (lumps - 0.5) * 1.2 - h * 0.9 + tint.a * 0.3) * (1.0 - smoothstep(0.55, 1.0, h));
     if (dens < 0.15 || dth > dens * 1.6) return col;
-    float3 smoke = lerp(SMOKE_COLOUR, tint.rgb * 0.75, steps(saturate(tint.a * 1.3), 4.0, dth));
+    float3 smoke = lerp(brew, tint.rgb * 0.75, steps(saturate(tint.a * 1.3), 4.0, dth));
     return lerp(col, smoke * (1.0 + flash * 2.0) * (1.0 - h * 0.4), 0.85);
 }
 

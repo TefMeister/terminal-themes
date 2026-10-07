@@ -2,8 +2,9 @@
 // Back to front: a banded night sky with stars, a big moon and drifting clouds; witches on brooms
 // flying across in the distance; two rows of hills with dead trees and gravestones; a foggy field
 // rolling towards you, with zombies walking out of the dark (seen only when lightning lights them);
-// the witch's hut on the left, potions brewing behind its window (now and then one goes bang in purple
-// or pink, and the chimney smoke takes the colour); the sheet ghost, which turns up in a different
+// the witch's hut on the left, potions brewing behind its window, the chimney smoke always in the
+// colour the window had when it left (now and then one goes bang in purple or pink, and the smoke
+// takes that colour too); the sheet ghost, which turns up in a different
 // spot each visit, near or far, drifting across; turned pumpkins in the bottom corners; then,
 // nearest of all, spiders dangling from the top and crawling on the inside of the glass (so you see
 // their undersides).
@@ -52,6 +53,11 @@ static const float3 SKY_TOP        = float3(0.035, 0.015, 0.075);
 static const float3 SKY_LOW        = float3(0.150, 0.060, 0.170);
 static const float  SKY_BANDS      = 9.0;
 static const float  HORIZON        = 0.60;   // where the field starts (share of the height)
+// a few stars, scattered: the sky is cut into squares, each holds at most one star at a random spot,
+// so they never line up and never crowd
+static const float  STAR_BLOCK     = 30.0;   // size of those squares, in chunky pixels
+static const float  STAR_CHANCE    = 0.22;   // share of the squares that hold a star
+static const float3 STAR_COLOUR    = float3(0.90, 0.85, 1.00);
 static const float2 MOON_POS       = float2(0.80, 0.20);
 static const float  MOON_SIZE      = 0.12;   // radius, as a share of the height
 static const float3 MOON_COLOUR    = float3(1.00, 0.93, 0.72);
@@ -215,7 +221,8 @@ static const float  PORCH_PK_X[2]  = { 24.0, 104.0 };           // pumpkins on t
 static const float  PORCH_PK_SCALE = 0.24;   // their size, relative to the hut's
 static const float  SMOKE_RISE     = 0.25;   // how fast the smoke climbs
 static const float  SMOKE_HEIGHT   = 80.0;   // how high the column reaches, in hut pixels
-static const float3 SMOKE_COLOUR   = float3(0.34, 0.31, 0.38);
+static const float3 SMOKE_COLOUR   = float3(0.34, 0.31, 0.38);   // the grey under the colour
+static const float  SMOKE_BREW     = 0.80;   // how much of the window's colour the smoke carries (0 = grey, 1 = the colour itself)
 static const float3 RIM_COLOUR     = float3(0.06, 0.06, 0.10);   // moonlight on the zombies' edges
 
 // --- witches ---
@@ -528,8 +535,15 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     // --- sky ---
     float v = c.y / max(horizonY, 1.0);
     float3 col = lerp(SKY_TOP, SKY_LOW, steps(v, SKY_BANDS, dth));
-    float star = hash2(float2(cell));
-    if (star > 0.9965 && v < 0.75) col += (0.25 + 0.35 * hash(star * 91.0 + loopIndex(floor(T * 1.5), 1.5))) * float3(0.9, 0.85, 1.0);
+    // one star at most per square of sky, at a spot of its own, so they neither line up nor crowd
+    float2 sq = floor(c / STAR_BLOCK);
+    float star = hash2(sq * 1.7 + 13.0);
+    if (star < STAR_CHANCE && v < 0.75)
+    {
+        float2 spot = floor(sq * STAR_BLOCK + 2.0 + float2(hash(star * 53.1 + sq.x), hash(star * 71.3 + sq.y)) * (STAR_BLOCK - 4.0));
+        if (all(cell == int2(spot)))
+            col += (0.25 + 0.35 * hash(star * 91.0 + loopIndex(floor(T * 1.5), 1.5))) * STAR_COLOUR;
+    }
     float2 moon = MOON_POS * grid;
     float mr = MOON_SIZE * grid.y;
     float md = length(c - moon);
