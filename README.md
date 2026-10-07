@@ -54,8 +54,10 @@ makes every movement repeat on the dot, so the clip joins up without a seam.
 **New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
 drifting clouds and witches on brooms flying across far away, two rows of hills with dead trees and
 gravestones, and a witch's hut on the left with pumpkins on its porch. Potions are brewing inside:
-the window glow drifts from green to purple, pink and teal, and now and then something goes bang in
-quick purple or pink flashes that light up the hut, while the chimney smoke takes the same colour.
+the window glow drifts from green to purple, pink and teal, and the chimney smoke carries whichever
+colour the window had when it left, so the puffs climbing the sky match the brew. Now and then
+something goes bang in quick purple or pink flashes that light up the hut, and that smoke takes the
+bang's colour. A few stars sit scattered across the sky, never in rows.
 
 Big gnarled trees stand in the field, mostly bare with a few dark green, yellow and red leaves
 left, black against the night until lightning shows their bark, with a few lanterns swinging gently from
