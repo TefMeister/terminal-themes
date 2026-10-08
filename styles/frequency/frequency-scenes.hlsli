@@ -19,7 +19,8 @@ static const float3 FISH_SPECK     = float3(0.30, 0.38, 0.32);
 
 // --- skulls: flying diagonally, smooth at 30 frames a second, with a short smear behind ---
 static const float  SKULL_FPS      = 30.0;
-static const float2 SKULL_DIR      = float2(1.0, 0.62);   // down and to the right
+static const float  SKULL_TURN_SEC = 2.8;    // the skulls glitch and change direction this often
+static const int    SKULL_TURNS_MAX = 8;     // enough turns for the skulls and the crumble after them
 static const int    SKULL_LAYERS   = 3;
 static const float  SKULL_SPEED    = 34.0;   // cells per second at the smallest size
 static const float  SKULL_DENSITY  = 0.5;
@@ -127,10 +128,29 @@ float3 fishScene(float2 c, float2 grid, float t)
     return col;
 }
 
+// the skulls glitch every SKULL_TURN_SEC and come out of it flying a different diagonal.
+// Returns how far they have travelled (at speed 1) and the way they are heading now.
+float2 skullTravel(float ts, out float2 dir)
+{
+    float  seg  = floor(ts / SKULL_TURN_SEC);
+    float2 dirs[4] = { float2(1.0, 0.62), float2(-1.0, 0.62), float2(-1.0, -0.62), float2(1.0, -0.62) };
+    int    way  = 0;
+    float2 sum  = float2(0, 0);
+    [loop] for (int k = 0; k < SKULL_TURNS_MAX; k++)
+    {
+        if (k >= seg) break;
+        sum += normalize(dirs[way]) * SKULL_TURN_SEC;
+        way = (way + 1 + (int)(hash(k * 3.7 + 0.5) * 3.0)) % 4;   // always a different way
+    }
+    dir = normalize(dirs[way]);
+    return sum + dir * (ts - max(seg, 0.0) * SKULL_TURN_SEC);
+}
+
 float3 skullScene(float2 c, float2 grid, float t)
 {
     float  ts  = floor(t * SKULL_FPS) / SKULL_FPS;
-    float2 dir = normalize(SKULL_DIR);
+    float2 dir;
+    float2 travel = skullTravel(max(ts, 0.0), dir);
     float  band = frac((c.x - c.y * 1.6) * 0.012 + ts * 0.25);
     float3 col = band + dither(c) * 0.1 < 0.5 ? SKULL_BG_A : SKULL_BG_B;
     if (!gSprites) return col;
@@ -140,7 +160,7 @@ float3 skullScene(float2 c, float2 grid, float t)
         float  sc     = gBase * (L == SKULL_LAYERS - 1 ? 2.0 : 1.0);
         float  near   = (L + 1.0) / SKULL_LAYERS;
         float  S      = SKULL_S * sc * (2.8 - 0.5 * L);
-        float2 q      = c - floor(dir * SKULL_SPEED * sc * (0.6 + 0.4 * L) * ts) + float2(L * 37.0, L * 91.0);
+        float2 q      = c - floor(travel * SKULL_SPEED * sc * (0.6 + 0.4 * L)) + float2(L * 37.0, L * 91.0);
         float2 tile   = floor(q / S);
         float2 tid    = tile + L * 17.0;
         if (hash2(tid) > SKULL_DENSITY) continue;
