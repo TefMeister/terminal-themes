@@ -15,7 +15,7 @@ static const float  SPACE_SPEED    = 9.0;    // voxels per second, flying forwar
 static const float  SPACE_FOV      = 1.3;
 static const int    SPACE_STEPS    = 56;     // how far each ray looks, in voxels stepped through
 static const float  SPACE_FAR      = 38.0;   // fog distance
-static const float  SPACE_PAN_AT   = 5.0;    // seconds in, the camera starts to look around
+static const float  SPACE_PAN_AT   = 3.0;    // seconds in, the camera starts to look around
 static const float  SPACE_PAN      = 2.4;    // how far it turns, radians
 static const float  SPACE_WILD     = 0.6;    // how far apart in colour the blocks of one rock are (1 = anything)
 static const float  SPACE_CYCLE    = 0.25;   // how fast the colours slide round the rainbow
