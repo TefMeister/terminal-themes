@@ -22,6 +22,8 @@ static const float  SPACE_CYCLE    = 0.25;   // how fast the colours slide round
 static const float  SPACE_GLITCH_RATE  = 6.0;   // rocks pick whether to glitch this many times a second
 static const float  SPACE_GLITCH_SHARE = 0.12;  // share of rocks glitching at any moment
 static const float  SPACE_GLITCH_SHIFT = 5.0;   // how far a glitching rock's rows slide, in blocks
+static const float  SPACE_SINGLES  = 0.55;   // chance that a lattice block with no rock holds one lone cube
+static const float  SPACE_SINGLE_GLITCH = 0.3;  // share of lone cubes glitching at any moment
 static const float3 SPACE_BG       = float3(0.03, 0.01, 0.07);
 
 float3 zoomScene(float2 c, float2 grid, float t)
@@ -61,8 +63,21 @@ bool rockAt(float3 v, float t, out float3 id, out float glitched)
     glitched = 0.0;
     if (blk.x == 0.0 && blk.y == 0.0) return false;
     float3 h = hash3(blk + 0.37);
-    if (h.x > SPACE_DENSITY) return false;
     float slot = floor(t * SPACE_GLITCH_RATE);
+    if (h.x > SPACE_DENSITY)
+    {
+        // no rock here; maybe a single cube on its own, which glitches more often than the rocks
+        float3 sh = hash3(blk + 5.17);
+        if (sh.x > SPACE_SINGLES) return false;
+        float3 at = blk * SPACE_CELL + floor(1.0 + sh.yzx * (SPACE_CELL - 2.0));
+        if (hash3(blk + slot * 0.731).z < SPACE_SINGLE_GLITCH)
+        {
+            glitched = 1.0;
+            if (hash(slot * 5.7 + blk.y) < 0.35) return false;
+            at.x += floor((hash(slot + blk.z) - 0.5) * 3.0);
+        }
+        return all(v == at);
+    }
     if (hash3(blk + slot * 0.913).y < SPACE_GLITCH_SHARE)
     {
         glitched = 1.0;

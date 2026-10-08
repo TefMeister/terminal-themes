@@ -6,6 +6,11 @@ static const float  FISH_FPS       = 2.0;
 static const int    FISH_LAYERS    = 3;      // depth layers; the front one is drawn twice the size
 static const float  FISH_SPEED     = 12.0;   // cells per second at the smallest size
 static const float  FISH_DENSITY   = 0.55;   // share of places in a lane that hold a fish
+static const float  FISH_RATES[9]  = { 2.0, 3.0, 5.0, 8.0, 12.0, 15.0, 24.0, 30.0, 60.0 };  // frame rates the lanes pick from
+static const float  FISH_SWIM_FPS  = 4.0;    // the tail flicks at most this often, whatever the lane's rate
+static const float  FISH_SWAP_SEC  = 4.0;    // roughly how often each fish glitches into another kind
+static const float  FISH_SWAP_GLITCH = 0.35; // how long that glitch lasts
+static const float  FISH_BONES     = 0.65;   // share of fish that are bones at any moment
 static const float  FISH_FAR       = 0.45;   // brightness of the back layer (front = 1)
 static const float3 FISH_WATER_TOP  = float3(0.05, 0.16, 0.20);
 static const float3 FISH_WATER_DEEP = float3(0.01, 0.04, 0.07);
@@ -63,6 +68,12 @@ static const float3 POLKA_DOT      = float3(1.00, 0.90, 0.68);
 static const float3 POLKA_SPARK    = float3(0.70, 0.85, 1.00);
 
 
+// mostly bones, sometimes a living fish
+float fishKind(float h)
+{
+    return h < FISH_BONES ? floor(h / FISH_BONES * FISH_KINDS) : FISH_KINDS + floor((h - FISH_BONES) / (1.0 - FISH_BONES) * LIVE_KINDS);
+}
+
 float3 fishScene(float2 c, float2 grid, float t)
 {
     int   step = (int)floor(t * FISH_FPS);
@@ -82,19 +93,36 @@ float3 fishScene(float2 c, float2 grid, float t)
         float yo    = L * 41.0;
         float lane  = floor((c.y + yo) / laneH);
         float seed  = lane * 7.31 + L * 113.0;
+        // every lane moves at its own frame rate, from a slow 2 a second to a smooth 60
+        float fps   = FISH_RATES[min(8, (int)(hash(seed + 5.0) * 9.0))];
+        int   lstep = (int)floor(t * fps);
+        float lts   = lstep / fps;
         float dir   = hash(seed) > 0.5 ? 1.0 : -1.0;
         float speed = FISH_SPEED * sc * (0.5 + hash(seed + 1.0));
         float tileW = FISH_W * sc * (2.0 + 3.0 * hash(seed + 2.0));
-        float wx    = c.x - dir * floor(speed * ts);
+        float wx    = c.x - dir * floor(speed * lts);
         float tile  = floor(wx / tileW);
         if (hash2(float2(tile, seed)) > FISH_DENSITY) continue;
+        float id    = tile * 3.7 + seed;
         float lx    = wx - tile * tileW - floor(hash2(float2(tile, seed + 3.0)) * (tileW - FISH_W * sc));
-        float bob   = round(sin(ts * 1.7 + tile * 2.1) * 2.0) * sc;
+        float bob   = round(sin(lts * 1.7 + tile * 2.1) * 2.0) * sc;
         float ly    = c.y + yo - lane * laneH - floor((laneH - FISH_H * sc) * 0.5) - bob;
-        int   kind  = min(FISH_KINDS - 1, (int)(hash2(float2(tile, seed + 4.0)) * FISH_KINDS));
-        int   frame = (step + (int)tile) & 1;
-        float4 sp = sprite(int2((kind * 2 + frame) * FISH_W, FISH_Y), int2(FISH_W, FISH_H), float2(lx, ly), sc, dir < 0.0);
-        if (sp.a > 0.5) col = lerp(water, sp.rgb, near);
+        int   frame = (int)wrap(floor(t * min(fps, FISH_SWIM_FPS)) + tile, 2.0);
+        // now and then it glitches into another fish: bones become a living fish and back
+        float swapT = t / FISH_SWAP_SEC + hash(id + 0.4) * 5.0;
+        float slot  = floor(swapT);
+        float kind  = fishKind(hash(id + slot * 1.7));
+        bool  glitching = frac(swapT) * FISH_SWAP_SEC < FISH_SWAP_GLITCH;
+        if (glitching && hash(floor(t * 30.0) + id) < 0.5) kind = fishKind(hash(id + (slot - 1.0) * 1.7));
+        if (glitching) lx += floor((hash(floor(ly / (2.0 * sc)) + floor(t * 30.0)) - 0.5) * 6.0) * sc;
+        int2 org = kind < FISH_KINDS ? int2(((int)kind * 2 + frame) * FISH_W, FISH_Y)
+                                     : int2(LIVE_X + (((int)kind - FISH_KINDS) * 2 + frame) * FISH_W, SKULL_Y);
+        float4 sp = sprite(org, int2(FISH_W, FISH_H), float2(lx, ly), sc, dir < 0.0);
+        if (sp.a > 0.5)
+        {
+            col = lerp(water, sp.rgb, near);
+            if (glitching && hash(floor(t * 20.0) + id + 3.0) < 0.4) col = hue(hash(floor(t * 20.0) + id)) * luma(sp.rgb) * 1.5;
+        }
     }
     return col;
 }

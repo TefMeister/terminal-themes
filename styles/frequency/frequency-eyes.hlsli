@@ -1,7 +1,8 @@
 // Frequency, part 6: the second station, second half. Black, with old green computer lines
-// flickering; single eyes opening one after another, each looking its own way, until the window is
-// full of them; the eyes turning into laughing lips in different lipsticks; down the throat of the
-// last one; and out over an endless ocean of made-up letters with a night city of letters far off.
+// flickering; single eyes opening one after another, near and far, each looking its own way, until
+// the window is full of them; each glitching in its own way into laughing lips in different
+// lipsticks; the middle mouth coming last, from far back, growing until it swallows everything,
+// and down its throat; and out over an endless ocean of made-up letters with a night city of letters far off.
 // Included by frequency.hlsl after frequency-dream.hlsli (it uses glyphPixel and rot2 from there).
 
 // --- old computer lines ---
@@ -9,16 +10,20 @@ static const float3 PC_GREEN       = float3(0.25, 1.00, 0.40);
 static const float  PC_ROW_ON      = 0.5;    // share of text rows lit at any moment
 static const float  PC_FLICKER     = 9.0;    // how often a row decides again, per second
 
-// --- eyes ---
-static const float  EYE_SLOT_W     = 64.0;   // space for one eye, cells (x the sprite size)
-static const float  EYE_SLOT_H     = 40.0;
-static const float  EYE_FILL       = 0.85;   // share of EYES_SEC by which every place holds an eye
+// --- eyes and mouths: scattered at different depths, near ones big and bright, far ones small and dim ---
+static const int    FACE_COUNT     = 30;
+static const float  FACE_MIN       = 0.07;   // eye width far back, share of the window height...
+static const float  FACE_MAX       = 0.34;   // ...and right in front
+static const float  FACE_FAR_DIM   = 0.35;   // brightness of the furthest ones
+static const float  EYE_FILL       = 0.85;   // share of EYES_SEC by which every eye has opened
 static const float  EYE_OPEN_SEC   = 0.25;
+static const float  FACE_SWAP      = 0.6;    // share of LIPS_SEC over which the eyes glitch into mouths
+static const float  FACE_GLITCH_SEC = 0.45;  // how long each one's glitch lasts
+static const float  MOUTH_LAST_AT  = 0.65;   // share of LIPS_SEC when the middle mouth appears
+static const float  MOUTH_START    = 0.05;   // its first size, share of the window height
+static const float  MOUTH_GROW     = 0.8;    // how fast it grows (it doubles about every 0.9 s)
 static const float3 IRISES[6]      = { float3(0.25, 0.55, 0.95), float3(0.30, 0.70, 0.30), float3(0.45, 0.28, 0.12),
                                        float3(0.60, 0.55, 0.20), float3(0.55, 0.30, 0.85), float3(0.85, 0.15, 0.15) };
-
-// --- lips ---
-static const float  LIPS_FILL      = 0.8;    // share of LIPS_SEC by which every eye has become lips
 static const float3 LIPSTICKS[8]   = { float3(0.85, 0.05, 0.12), float3(1.00, 0.20, 0.60), float3(0.45, 0.05, 0.30),
                                        float3(0.10, 0.06, 0.10), float3(1.00, 0.45, 0.35), float3(0.15, 0.35, 1.00),
                                        float3(0.60, 0.15, 0.90), float3(1.00, 0.50, 0.05) };
@@ -57,18 +62,6 @@ float3 pcScene(float2 c, float2 grid, float t)
     return col * saturate(t / 0.4);
 }
 
-// which place in the grid of eyes (and later lips) this cell belongs to
-void slotOf(float2 c, out float2 mid, out float id, out float size)
-{
-    float sw = EYE_SLOT_W * gBase, sh = EYE_SLOT_H * gBase;
-    float row = floor(c.y / sh);
-    float off = wrap(row, 2.0) * sw * 0.5;
-    float col = floor((c.x - off) / sw);
-    id   = col * 157.0 + row * 31.7;
-    mid  = float2(col * sw + off + sw * 0.5 + (hash(id) - 0.5) * sw * 0.15, row * sh + sh * 0.5 + (hash(id + 1.0) - 0.5) * sh * 0.15);
-    size = sw * 0.8 * (0.8 + 0.3 * hash(id + 2.0));
-}
-
 // one eye, q measured in eye widths from its middle; alpha 0 outside
 float4 eyeAt(float2 q, float id, float t, float open)
 {
@@ -98,13 +91,28 @@ float4 eyeAt(float2 q, float id, float t, float open)
     return float4(col, 1);
 }
 
-// one laughing mouth, q measured in mouth widths; wide forces it open (for the throat)
+// how wide a mouth is open: five ways of laughing, picked per mouth
+float laughOf(float id, float t, inout float2 q)
+{
+    int   kind = min(4, (int)(hash(id + 13.0) * 5.0));
+    float ph   = hash(id) * 6.0;
+    if (kind == 0) { q.y += 0.015 * sin(t * 28.0 + ph); return 0.2 + 0.7 * abs(sin(t * 14.0 + ph)); }   // cackle
+    if (kind == 1) { q.y += 0.03 * sin(t * 5.0 + ph);   return 0.55 + 0.45 * sin(t * 2.5 + ph); }       // slow guffaw
+    if (kind == 2) { q.x += 0.03 * sin(t * 7.0 + ph);   return 0.25 + 0.2 * abs(sin(t * 9.0 + ph)); }   // giggle, head shaking
+    if (kind == 3)                                                                                        // maniacal: wide, hold, snap shut
+    {
+        float x = frac(t / 1.6 + ph);
+        return x < 0.15 ? x / 0.15 : (x < 0.75 ? 1.0 - 0.08 * abs(sin(t * 30.0)) : 0.05);
+    }
+    return 0.12 + 0.05 * sin(t * 40.0 + ph);                                                             // trembling smile
+}
+
+// one laughing mouth, q measured in mouth widths; wide forces it open (for the throat).
+// Alpha 2 means inside the mouth.
 float4 lipsAt(float2 q, float id, float t, float wide)
 {
-    float rate  = 5.0 + 3.0 * hash(id + 3.0);
-    float laugh = max(abs(sin(t * rate + hash(id) * 6.0)), wide);
+    float laugh = max(laughOf(id, t, q), wide);
     float o     = 0.05 + 0.17 * laugh;
-    q.y += 0.02 * sin(t * rate * 2.0) * (1.0 - wide);
     float ax = abs(q.x);
     if (ax > 0.5) return float4(0, 0, 0, 0);
     float w     = saturate(1.0 - 4.0 * q.x * q.x);
@@ -121,7 +129,7 @@ float4 lipsAt(float2 q, float id, float t, float wide)
         if (q.y < itop + 0.07 && ax < 0.3) col = frac(q.x / 0.055 + 0.5) < 0.12 ? float3(0.6, 0.58, 0.55) : float3(0.96, 0.94, 0.88);
         if (q.y > ibot - 0.05 && ax < 0.24) col = frac(q.x / 0.05 + 0.5) < 0.12 ? float3(0.6, 0.58, 0.55) : float3(0.92, 0.9, 0.84);
         if (length((q - float2(0.0, ibot - 0.03)) / float2(0.16, 0.06)) < 1.0 && q.y > ibot - 0.05) col = float3(0.85, 0.32, 0.40);
-        return float4(col, 2);                                                               // alpha 2 = inside the mouth
+        return float4(col, 2);
     }
     float3 col = lip * (q.y < 0.0 ? 0.8 : 1.0);
     if (q.y > 0.0 && length((q - float2(0.06, (ibot + bot) * 0.5)) / float2(0.12, 0.025)) < 1.0) col = lerp(col, float3(1, 1, 1), 0.45);  // gloss
@@ -129,66 +137,75 @@ float4 lipsAt(float2 q, float id, float t, float wide)
     return float4(col, 1);
 }
 
-float3 eyesScene(float2 c, float2 grid, float t)
+// eyes, then mouths, then the dive down the throat. tf counts from the first eye opening.
+float3 facesScene(float2 c, float2 grid, float tf)
 {
-    float2 mid; float id, size;
-    slotOf(c, mid, id, size);
-    float appear = EYES_SEC * EYE_FILL * sqrt(hash(id + 9.0));
-    if (t < appear) return float3(0, 0, 0);
-    float4 e = eyeAt((c - mid) / size, id, t, saturate((t - appear) / EYE_OPEN_SEC));
-    return e.rgb * min(e.a, 1.0);
-}
+    float  lipsFrom   = EYES_SEC;
+    float  throatFrom = EYES_SEC + LIPS_SEC;
+    float  others     = 1.0 - saturate((tf - throatFrom) / (THROAT_SEC * 0.5));
+    float  end        = 1.0 - smoothstep(throatFrom + THROAT_SEC * 0.85, throatFrom + THROAT_SEC, tf);
+    float3 col = float3(0, 0, 0);
 
-// the slot nearest the middle of the window: the last mouth, the one we dive into
-float centreSlot(float2 grid)
-{
-    float2 mid; float id, size;
-    slotOf(grid * 0.5, mid, id, size);
-    return id;
-}
-
-float3 lipsScene(float2 c, float2 grid, float t)
-{
-    float2 mid; float id, size;
-    slotOf(c, mid, id, size);
-    float swap = id == centreSlot(grid) ? 0.0 : LIPS_SEC * LIPS_FILL * hash(id + 11.0);
-    float2 q = (c - mid) / size;
-    float4 r = t < swap ? eyeAt(q, id, t + EYES_SEC, 1.0) : lipsAt(q, id, t, 0.0);
-    return r.a > 0.0 ? r.rgb : float3(0, 0, 0);
-}
-
-float3 throatScene(float2 c, float2 grid, float t)
-{
-    float  k = saturate(t / THROAT_SEC);
-    float2 mid; float id, size;
-    slotOf(grid * 0.5, mid, id, size);
-    float  zoom = exp(k * k * 5.0);
-    float2 m    = lerp(mid, grid * 0.5, saturate(k * 3.0));
-    float2 q    = (c - m) / (size * zoom);
-    float  wide = saturate(k * 4.0);
-    float  fade = (1.0 - smoothstep(0.85, 1.0, k));
-    // near the middle we are looking at the big mouth; further out at the others, dimming.
-    // Only one mouth is drawn per cell, which keeps the shader quick to load.
-    bool big = abs(q.x) < 0.5 && abs(q.y) < 0.45;
-    float  sid;
-    if (!big)
+    // the middle mouth: appears last, small and far back, and grows until it swallows everything
+    float mAt = lipsFrom + LIPS_SEC * MOUTH_LAST_AT;
+    if (tf > mAt)
     {
-        float2 sm; float ss;
-        slotOf(c, sm, sid, ss);
-        q = (c - sm) / ss; wide = 0.0; fade *= 1.0 - k;
+        float  gt    = tf - mAt;
+        float  size  = grid.y * MOUTH_START * exp(gt * MOUTH_GROW);
+        float2 q     = (c - grid * 0.5) / size;
+        float  wide  = saturate((tf - throatFrom) / 1.0);
+        float4 r     = lipsAt(q, 777.0, tf, wide);
+        bool   front = size > grid.y * 0.6;                    // once it is big, it is in front of everything
+        if (r.a > 1.5 && tf > throatFrom)
+        {
+            // down the throat: fleshy rings rushing past, dark in the middle
+            float  rr = length(q / float2(0.42, 0.2));
+            float  dp = 0.25 / (rr + 0.03) + tf * 3.0;
+            float3 fl = frac(dp) < 0.5 ? float3(0.42, 0.04, 0.07) : float3(0.62, 0.10, 0.12);
+            r.rgb = lerp(r.rgb, fl * (0.8 + 0.3 * hash2(floor(c / 3.0))) * saturate(rr * 1.6), saturate(wide * 2.0));
+        }
+        if (r.a > 0.0) col = r.rgb * lerp(FACE_FAR_DIM, 1.0, saturate(gt / 2.0));
+        if (front && r.a > 0.0) return col * end;
+        if (front) others = min(others, 0.4);
     }
-    else sid = id;
-    float4 r = lipsAt(q, sid, t + LIPS_SEC, wide);
-    if (big && r.a > 1.5)
+
+    // the others, back to front: eyes opening one by one, then each glitching into a mouth
+    [loop] for (int i = 0; i < FACE_COUNT; i++)
     {
-        // inside the mouth, down the throat: fleshy rings rushing past, dark in the middle
-        float  rr = length(q / float2(0.42, 0.2));
-        float  dp = 0.25 / (rr + 0.03) + t * 3.0;
-        float3 fl = frac(dp) < 0.5 ? float3(0.42, 0.04, 0.07) : float3(0.62, 0.10, 0.12);
-        fl *= 0.8 + 0.3 * hash2(floor(c / 3.0));
-        return lerp(r.rgb, fl * saturate(rr * 1.6), saturate(k * 2.5)) * fade;
+        float depth = (i + 0.5) / FACE_COUNT;
+        float size  = lerp(FACE_MIN, FACE_MAX, depth * depth) * grid.y;
+        float id    = i * 13.1 + 1.0;
+        float2 pos  = (float2(hash(id + 0.1), hash(id + 0.3)) * 1.1 - 0.05) * grid + float2(sin(tf * 0.3 + id), cos(tf * 0.23 + id)) * size * 0.1;
+        float2 q    = (c - pos) / size;
+        if (abs(q.x) > 0.6 || abs(q.y) > 0.5) continue;
+        float appear = EYES_SEC * EYE_FILL * hash(id + 0.7);
+        if (tf < appear) continue;
+        float swap  = lipsFrom + LIPS_SEC * FACE_SWAP * hash(id + 0.9);
+        bool  mouth = tf >= swap;
+        float gw    = (tf - swap) / FACE_GLITCH_SEC;
+        bool  invert = false;
+        float3 tint = float3(1, 1, 1);
+        if (gw > -0.5 && gw < 1.0)
+        {
+            // each one glitches across in its own style
+            int   style = min(4, (int)(hash(id + 21.0) * 5.0));
+            float k     = saturate(gw);
+            float tick  = floor(tf * 24.0);
+            float b     = bell(saturate(gw * 0.67 + 0.33));
+            if (style == 0) { q.x += (hash(floor(q.y * 14.0) + tick + id) - 0.5) * 0.5 * b; mouth = hash(tick + id) < k; }   // slices
+            if (style == 1) { mouth = hash(tick * 1.3 + id) < k; invert = hash(tick + id * 0.3) < 0.5; }                    // flicker
+            if (style == 2) { float n = lerp(40.0, 3.0, b); q = (floor(q * n) + 0.5) / n; mouth = gw > 0.5; }               // pixelate
+            if (style == 3) { q.y /= 1.0 + 3.0 * b; q.x *= 1.0 + 0.6 * b; mouth = gw > 0.5; }                              // stretch
+            if (style == 4) { mouth = gw > 0.5; tint = lerp(float3(1, 1, 1), hue(hash(tick + id)) * 1.6, b); }             // colours
+        }
+        float4 r = mouth ? lipsAt(q, id, tf, 0.0) : eyeAt(q, id, tf, saturate((tf - appear) / EYE_OPEN_SEC));
+        if (r.a > 0.0)
+        {
+            float3 rc = invert ? 1.0 - r.rgb : r.rgb;
+            col = rc * tint * lerp(FACE_FAR_DIM, 1.0, depth) * others;
+        }
     }
-    return (r.a > 0.0 ? r.rgb : float3(0, 0, 0)) * fade;
+    return col * end;
 }
 
 // the night skyline, built of letters; returns how lit the building at this x is (for reflections)

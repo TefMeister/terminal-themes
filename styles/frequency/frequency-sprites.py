@@ -4,7 +4,8 @@
 
 Layout (must match the SHEET constants at the top of frequency.hlsl):
     y   0..23   fish bones, 48 x 24 each: 3 kinds x 2 swim frames, kind-major (6 columns)
-    y  24..47   skulls, 24 x 24 each: 4 kinds
+    y  24..47   skulls, 24 x 24 each: 4 kinds; then from x 96, living fish 48 x 24: 3 kinds x 2 frames
+                (frequency-livefish.py), the fish the bones glitch into
     y  48..111  the cartoon dog jogging, 64 x 64 each: 8 frames
     y 112..119  letters, 6 x 8 each: 32 real (digits, capitals), then 32 made-up (frequency-glyphs.py)
 Everything faces right. Transparent pixels have alpha 0; the shader tints and scales the rest.
@@ -19,6 +20,7 @@ FISH_W, FISH_H, FISH_KINDS, FISH_FRAMES = 48, 24, 3, 2
 SKULL_Y, SKULL_S, SKULL_KINDS = 24, 24, 4
 DOG_Y, DOG_S, DOG_FRAMES = 48, 64, 8
 GLYPH_Y = 112
+LIVE_X = 96
 
 # --- palettes ---
 BONE, BONE_SHADE, BONE_DARK = (236, 230, 206, 255), (168, 158, 132, 255), (92, 84, 70, 255)
@@ -215,6 +217,10 @@ def main():
             draw_fish(img, (kind * FISH_FRAMES + frame) * FISH_W, 0, kind, frame)
     for kind in range(SKULL_KINDS):
         draw_skull(img, kind * SKULL_S, SKULL_Y, kind)
+    live = SourceFileLoader("livefish", os.path.join(HERE, "frequency-livefish.py")).load_module()
+    for kind in range(len(live.KINDS)):
+        for frame in range(FISH_FRAMES):
+            live.draw_live_fish(img, LIVE_X + (kind * FISH_FRAMES + frame) * FISH_W, SKULL_Y, kind, frame)
     for frame in range(DOG_FRAMES):
         draw_dog(img, frame * DOG_S, DOG_Y, frame)
     glyphs = SourceFileLoader("glyphs", os.path.join(HERE, "frequency-glyphs.py")).load_module()
