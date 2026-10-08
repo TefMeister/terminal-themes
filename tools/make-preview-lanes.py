@@ -17,9 +17,10 @@ OUT = os.path.join(HERE, "..", "preview", "green-monitor-lanes.png")
 
 # same numbers as lanes.hlsl
 GLASS_TINT = np.array([0.020, 0.070, 0.035])
-PIC_STRENGTH, PIC_CONTRAST, EDGE_FADE, SIDE_FADE = 0.35, 1.4, 0.06, 0.04
+PIC_GREEN = np.array([0.30, 1.00, 0.50])
+PIC_STRENGTH, PIC_CONTRAST, EDGE_FADE, SIDE_FADE = 0.20, 1.4, 0.06, 0.04
 STRIPE_PERIOD, STRIPE_DARKEN = 4.0, 0.55
-ROLL_HEIGHT, ROLL_STRENGTH = 0.10, 0.55
+ROLL_HEIGHT, ROLL_STRENGTH = 0.10, 0.25
 VIGNETTE = 1.35
 
 TEXT = [
@@ -34,16 +35,16 @@ TEXT = [
 
 
 def main():
-    pic = Image.open(os.path.join(STYLE, "lanes.png")).convert("RGB")
+    pic = Image.open(os.path.join(STYLE, "lanes.png")).convert("L")   # one dim green, no white
     fit = min(W / pic.width, H / pic.height)          # the whole banner fits inside the window
     pw, ph = int(pic.width * fit), int(pic.height * fit)
     pic = np.asarray(pic.resize((pw, ph), Image.LANCZOS), dtype=np.float64) / 255
     u, v = np.linspace(0, 1, pw), np.linspace(0, 1, ph)
     sm = lambda t: np.clip(t / EDGE_FADE, 0, 1) ** 2 * (3 - 2 * np.clip(t / EDGE_FADE, 0, 1))
     fade = (sm(u) * sm(1 - u))[None, :] * (sm(v) * sm(1 - v))[:, None]
-    lum = np.zeros((H, W, 3))
+    lum = np.zeros((H, W))
     top, left = (H - ph) // 2, (W - pw) // 2
-    lum[top:top + ph, left:left + pw] = np.clip(pic ** PIC_CONTRAST * 1.25, 0, 1) * fade[..., None]
+    lum[top:top + ph, left:left + pw] = np.clip(pic ** PIC_CONTRAST * 1.25, 0, 1) * fade
 
     y = np.arange(H)[:, None]
     stripe = np.where((y % STRIPE_PERIOD) < STRIPE_PERIOD / 2, 1 - STRIPE_DARKEN, 1.0)
@@ -52,7 +53,7 @@ def main():
     x = np.arange(W)[None, :] / W
     side = np.clip(np.minimum(x, 1 - x) / SIDE_FADE, 0, 1)
     side = (side * side * (3 - 2 * side))[..., None]
-    back = (GLASS_TINT + lum * bright) * side
+    back = (GLASS_TINT + PIC_GREEN * lum[..., None] * bright) * side
 
     txt = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(txt)

@@ -1,9 +1,10 @@
-// RobCo green monitor, with the faint striped Lanes plugin banner behind the text (own colours).
+// RobCo green monitor, with the Lanes plugin banner behind the text in a dim, striped green.
 // Based on robco.hlsl: same letter glow, glass tint, dark corners and user-message colour,
 // but the scanlines and the lighter band are gone from the screen. The stripes and the
 // rolling light bar now live only on the picture.
 // The picture comes from the profile's "experimental.pixelShaderImagePath".
-// The banner keeps its own green and yellow. It can also be an animated sheet of frames laid out
+// The banner is drawn in one dim green (no white, so the letters stay easy to read). It can also be
+// an animated sheet of frames laid out
 // in a grid (left to right, top to bottom): set the three SHEET numbers below to match.
 Texture2D shaderTexture;
 Texture2D image;
@@ -15,7 +16,8 @@ static const float  GLOW_STRENGTH = 0.45;   // halo added around letters (letter
 static const float3 GLASS_TINT    = float3(0.020, 0.070, 0.035); // green of the empty screen
 static const float  VIGNETTE      = 1.35;   // how dark the corners get
 
-static const float  PIC_STRENGTH  = 0.35;   // how faint the picture is (0 = gone, 1 = full)
+static const float3 PIC_GREEN     = float3(0.30, 1.00, 0.50); // the one colour the banner is drawn in
+static const float  PIC_STRENGTH  = 0.20;   // how faint the picture is (0 = gone, 1 = full)
 static const float  PIC_CONTRAST  = 1.4;    // pushes darks down so the banner reads clearly
 static const float  PIC_X         = 0.5;    // where the banner sits (0 = left edge, 1 = right edge)
 static const float  PIC_EDGE_FADE = 0.06;   // soft fade at the picture's left/right edges
@@ -23,7 +25,7 @@ static const float  STRIPE_PERIOD = 4.0;    // pixels per stripe cycle on the pi
 static const float  STRIPE_DARKEN = 0.55;   // how dark the dark stripe is
 static const float  ROLL_SECONDS  = 9.0;    // time for the light bar to travel top to bottom
 static const float  ROLL_HEIGHT   = 0.10;   // bar height (fraction of the screen)
-static const float  ROLL_STRENGTH = 0.55;   // how much the bar lights her up
+static const float  ROLL_STRENGTH = 0.25;   // how much the bar lights the banner up
 
 static const int    SHEET_COLS    = 1;      // frames per row in the sheet
 static const int    SHEET_ROWS    = 1;      // rows of frames in the sheet
@@ -88,10 +90,11 @@ float4 picture(float4 pos)
     float2 cell  = float2(frame % SHEET_COLS, frame / SHEET_COLS);
     float2 inner = clamp(uv, 0.5 / float2(w, h), 1.0 - 0.5 / float2(w, h));
     float3 p = image.Sample(samplerState, (cell + inner) / float2(SHEET_COLS, SHEET_ROWS)).rgb;
-    p = saturate(pow(p, PIC_CONTRAST) * 1.25);
+    float  l = dot(p, float3(0.299, 0.587, 0.114));
+    l = saturate(pow(l, PIC_CONTRAST) * 1.25);
     float fade = smoothstep(0, PIC_EDGE_FADE, uv.x) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.x)
                * smoothstep(0, PIC_EDGE_FADE, uv.y) * smoothstep(0, PIC_EDGE_FADE, 1 - uv.y);
-    return float4(p, fade);
+    return float4(PIC_GREEN * l, fade);
 }
 
 // the background fades to black in a thin strip at the left and right edges of the window, where the
