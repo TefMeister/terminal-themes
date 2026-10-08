@@ -61,15 +61,17 @@ makes every movement repeat on the dot, so the clip joins up without a seam.
 ### [`frequency`](styles/frequency/)
 
 **New, still being tuned.** A background that keeps changing station, as if someone were spinning a
-radio dial, in very fine pixel art. It plays two stations, nearly three minutes in all, then glitches
-back to its very first frame and starts again.
+radio dial, in very fine pixel art. It plays two stations, about two and a half minutes in all, then
+glitches back to its very first frame and starts again. The changes between scenes are long and
+soft: a band of static rises up the screen, the old picture rolling away above it and the new one
+already playing below, the two dissolving into each other inside it.
 
 **The first station:**
 
 1. Fish bones cross the screen in lanes, each lane at its own frame rate, from a jerky 2 frames a
    second to a smooth 60. Now and then a fish glitches into another: bones into a clownfish, a blue
    tang or a butterflyfish, and back.
-2. The radio swaps station (static, wavy interference, the picture rolling away) to skulls in
+2. The radio swaps station to skulls in
    psychedelic colours flying diagonally at a smooth 30 frames a second. Every few seconds they
    glitch and come out of it flying a different diagonal.
 3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
@@ -100,7 +102,9 @@ back to its very first frame and starts again.
    more broken than the last. Then the camera dives into the hole, into a tube of pixelated big
    bangs going off one after another, which opens onto the next scene.
 8. A huge digital bottle travels in an arc over the top of the screen from left to right, tipped
-   over and pouring out numbers and letters, shrinking until it is gone. They grow as they fly and turn into earth, rock, water,
+   over and pouring out numbers and letters, shrinking until it is gone. The letters and the
+   cubes they become are solid and spread out in depth, near ones big and bright, far ones small,
+   dim and hidden behind the heap. They grow as they fly and turn into earth, rock, water,
    grass and lava, piling up until they fill the window, then dissolving block by block into the
    tunnel.
 9. Those elements form a tunnel that slowly collapses in on itself as time warps, tiles crumbling away

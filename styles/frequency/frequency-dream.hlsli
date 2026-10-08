@@ -7,7 +7,7 @@
 // Included by frequency.hlsl, which holds the shared helpers.
 
 // --- the suburb: three towns in turn, each swallowed by a black hole, more broken each time ---
-static const float  SUB_PHASE_SEC  = 6.0;    // each town lasts this long (three of them fill SUBURB_SEC)
+static const float  SUB_PHASE_SEC  = 5.0;    // each town lasts this long (three of them fill SUBURB_SEC)
 static const float  SUB_HORIZON    = 0.42;   // share of the height down to the horizon
 static const int    SUB_ROWS       = 6;      // rows of houses from far to near
 static const float  SUB_HOUSE_W    = 48.0;   // space for one house, cells at the smallest size
@@ -61,6 +61,11 @@ static const float  BOTTLE_SPOUT   = 0.035;  // seconds between letters pouring 
 static const int    BOTTLE_STREAM  = 48;     // letters in the air at once
 static const float  BOTTLE_GROW    = 2.2;    // how fast a letter grows, sprite sizes per second
 static const float  BOTTLE_MATTER  = 0.45;   // seconds after leaving before a letter becomes matter
+static const float  BOTTLE_FAR     = 0.5;    // size of the furthest letters and cubes, against the nearest...
+static const float  BOTTLE_NEAR    = 1.6;    // ...which are this big
+static const float  BOTTLE_SPREAD  = 0.3;    // near ones drift outward, far ones inward, window widths per second
+static const float  BOTTLE_THICK   = 0.35;   // how far each letter's and cube's side reaches back, share of its width
+static const float  BOTTLE_BEHIND  = 0.35;   // anything further away than this is hidden behind the heap
 static const float3 BOTTLE_GLASS   = float3(0.40, 1.00, 0.80);
 static const float3 BOTTLE_DIGITS  = float3(0.30, 1.00, 0.45);
 static const float3 ELEMENTS[6]    = { float3(0.48, 0.47, 0.50), float3(0.45, 0.28, 0.14), float3(0.26, 0.62, 0.20),
@@ -353,44 +358,80 @@ float3 bottleScene(float2 c, float2 grid, float t)
     bottlePose(t, grid, pivot, tilt, bs, tip, spout);
     float  speed = grid.x * BOTTLE_THROW, drop = grid.x * BOTTLE_DROP;
 
-    // the heap of matter at the bottom, growing until it fills the window
+    // the heap of matter at the bottom, growing until it fills the window: stacked cubes, each lit
+    // on top and shaded on its right, the far (upper) part of the heap darker
     float land = clamp(tip.x, grid.x * 0.15, grid.x * 0.9);
     float rise = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.6);
     float B    = 6.0 * s;
     float bx   = floor(c.x / B);
     float top  = grid.y - grid.y * 1.15 * rise * lerp(0.55 + 0.45 * exp(-pow((c.x - land) / (grid.x * 0.35), 2.0)), 1.0, rise * rise) - hash(bx) * 3.0 * s;
-    if (c.y > top) col = element(hash2(float2(bx, floor(c.y / B))) * 61.0, c / s, t) * (wrap(c.x, B) < 1.0 || wrap(c.y, B) < 1.0 ? 0.7 : 1.0);
+    bool  inHeap = c.y > top;
+    if (inHeap)
+    {
+        float2 bl = float2(wrap(c.x, B), wrap(c.y, B));
+        col = element(hash2(float2(bx, floor(c.y / B))) * 61.0, c / s, t);
+        col *= bl.y < B * 0.3 ? 1.25 : (bl.x > B * 0.7 ? 0.65 : 1.0);
+        col *= lerp(0.55, 1.1, saturate((c.y - top) / (grid.y * 0.35)));
+    }
+    else if (c.y > top - B * 0.6 && rise > 0.0)                                   // the top faces of the surface cubes
+        col = element(hash2(float2(bx, floor(top / B) + 1.0)) * 61.0, c / s, t) * 1.3 * 0.55;
 
-    // the stream: letters leave the neck green and digital, then grow and turn into matter
+    // the stream: letters leave the neck green and digital, then grow and turn into matter. Each
+    // has its own distance: near ones are big and bright, far ones small, dim and hidden by the
+    // heap, and all of them are solid, showing their top and right side
     if (t > BOTTLE_TIP_SEC)
     {
-        float newest = floor(t / BOTTLE_SPOUT);
+        float  newest = floor(t / BOTTLE_SPOUT);
+        float  bestZ  = -1.0;
+        float3 best   = col;
         [loop] for (int i = 0; i < BOTTLE_STREAM; i++)
         {
             float n   = newest - i;
             float age = t - n * BOTTLE_SPOUT;
             if (n * BOTTLE_SPOUT < BOTTLE_TIP_SEC) break;
+            float z = hash(n + 5.5);
+            if (z <= bestZ) continue;
             float2 ep, et, es; float etl, ebs;                              // where the bottle was when it left
             bottlePose(n * BOTTLE_SPOUT, grid, ep, etl, ebs, et, es);
             float2 ep2, et2, es2; float etl2, ebs2;                        // the bottle's own movement carries them on
             bottlePose(n * BOTTLE_SPOUT + 0.05, grid, ep2, etl2, ebs2, et2, es2);
             float2 v0  = es * speed * (0.85 + 0.3 * hash(n)) + (et2 - et) / 0.05 + float2((hash(n + 3.0) - 0.5) * 0.2 * speed, 0.0);
-            float2 pos = et + v0 * age + float2(0.0, 0.5 * drop * age * age);
-            float  g   = max(s, floor(ebs * 0.4)) * (1.0 + floor(age * BOTTLE_GROW));
+            float2 pos = et + v0 * age + float2(0.0, 0.5 * drop * age * age) + float2((z - 0.5) * grid.x * BOTTLE_SPREAD * age, 0.0);
+            float  g   = max(s, floor(max(s, ebs * 0.4) * lerp(BOTTLE_FAR, BOTTLE_NEAR, z))) * (1.0 + floor(age * BOTTLE_GROW));
             float2 box = float2(GLYPH_W, GLYPH_H) * g;
+            float  e   = box.x * BOTTLE_THICK;                              // how far its side reaches back
             float2 l   = c - (pos - box * 0.5);
-            if (any(l < 0.0) || any(l >= box) || pos.y > top + box.y) continue;
+            if (l.x < 0.0 || l.x >= box.x + e || l.y < -0.6 * e || l.y >= box.y) continue;
+            if (pos.y > top + box.y || (inHeap && z < BOTTLE_BEHIND)) continue;
+            float  light = lerp(0.45, 1.1, z);
+            float3 hit = float3(-1, -1, -1);
             if (age < BOTTLE_MATTER)
             {
-                if (glyphPixel(hash(n * 1.7) * GLYPH_COUNT, l / g) > 0.5) { col = lerp(BOTTLE_DIGITS, float3(1, 1, 1), hash(n + 9.0) * 0.5); break; }
+                // a digital letter, three copies stepping back to give it a body
+                float gi = hash(n * 1.7) * GLYPH_COUNT;
+                if (all(l < box) && glyphPixel(gi, l / g) > 0.5) hit = lerp(BOTTLE_DIGITS, float3(1, 1, 1), hash(n + 9.0) * 0.5);
+                else
+                    [loop] for (int j = 1; j <= 3; j++)
+                    {
+                        float k = e * j / 3.0;
+                        if (glyphPixel(gi, (l - float2(k, -0.6 * k)) / g) > 0.5) { hit = BOTTLE_DIGITS * lerp(0.6, 0.35, j / 3.0); break; }
+                    }
             }
             else
             {
-                col = element(hash(n * 2.3) * 61.0, l / s, t);
-                if (any(l < s) || any(l >= box - s)) col *= 0.6;
-                break;
+                // a cube of matter: its front, and the top and right faces behind it
+                float3 m = element(hash(n * 2.3) * 61.0, l / s, t);
+                if (all(l < box) && all(l >= 0.0)) hit = m * ((any(l < s) || any(l >= box - s)) ? 0.75 : 1.0);
+                else
+                {
+                    float kmin = max(max(l.x - box.x, -l.y / 0.6), 0.0);
+                    float kmax = min(min(l.x, (box.y - l.y) / 0.6), e);
+                    if (kmin <= kmax) hit = m * (l.y < 0.0 ? 1.25 : 0.55);
+                }
             }
+            if (hit.x >= 0.0) { bestZ = z; best = lerp(float3(0.01, 0.02, 0.04), hit, light); }
         }
+        col = best;
     }
 
     // the bottle itself: glass outline, full of scrolling digits

@@ -28,25 +28,25 @@ static const float  SIDE_FADE      = 0.04;   // share of the width over which ea
 static const float  BASE_ROWS      = 330.0;  // sprites grow one size step for every this many pixel-art rows of window height
 
 // --- how long each part lasts, in seconds ---
-static const float  FISH_SEC       = 14.0;
-static const float  RF_SEC         = 2.0;    // each radio-frequency swap
-static const float  SKULL_SEC      = 11.0;
-static const float  CRUMBLE_SEC    = 5.0;
-static const float  BRIGHT_SEC     = 6.0;
-static const float  POLKA_SEC      = 12.0;
-static const float  TV_SEC         = 16.0;
-static const float  TEAR_SEC       = 2.5;
-static const float  ZOOM_SEC       = 2.5;
-static const float  SPACE_SEC      = 15.0;
-static const float  SUBURB_SEC     = 18.0;   // the second station starts here: three towns, 6 s each
-static const float  BOTTLE_SEC     = 8.0;
-static const float  TUNNEL_SEC     = 12.0;   // the tunnel collapsing, slowly...
-static const float  SWIRL_SEC      = 6.0;    // ...and the swirl once it has taken over
-static const float  PC_SEC         = 4.0;
-static const float  EYES_SEC       = 9.0;
-static const float  LIPS_SEC       = 7.0;
+static const float  FISH_SEC       = 9.0;
+static const float  RF_SEC         = 3.5;    // each radio-frequency swap
+static const float  SKULL_SEC      = 8.0;
+static const float  CRUMBLE_SEC    = 4.5;
+static const float  BRIGHT_SEC     = 4.0;
+static const float  POLKA_SEC      = 8.0;
+static const float  TV_SEC         = 11.0;
+static const float  TEAR_SEC       = 3.0;
+static const float  ZOOM_SEC       = 3.0;
+static const float  SPACE_SEC      = 10.0;
+static const float  SUBURB_SEC     = 15.0;   // the second station starts here: three towns, 5 s each
+static const float  BOTTLE_SEC     = 7.0;
+static const float  TUNNEL_SEC     = 9.0;   // the tunnel collapsing, slowly...
+static const float  SWIRL_SEC      = 4.0;    // ...and the swirl once it has taken over
+static const float  PC_SEC         = 3.0;
+static const float  EYES_SEC       = 7.0;
+static const float  LIPS_SEC       = 6.0;
 static const float  THROAT_SEC     = 4.0;
-static const float  CITY_SEC       = 19.0;   // the first CITY_STATIC of it is grey static
+static const float  CITY_SEC       = 13.0;   // the first CITY_STATIC of it is grey static
 static const float  START_AT       = 0.0;    // for trying things out: start this many seconds into the loop
 
 // --- random glitches between the planned ones ---
@@ -59,9 +59,11 @@ static const float  GLITCH_RATE_LO = 6.0;    // a glitch changes its look this m
 static const float  GLITCH_RATE_HI = 18.0;   // ...up to this many (kept low, so it never strobes hard)
 
 // --- radio-frequency swaps ---
-static const float  RF_BAR         = 0.08;   // the black bar that rolls past, share of the height
-static const float  RF_SNOW        = 0.7;    // how much static snow at the middle of a swap
-static const float  RF_WOBBLE      = 6.0;    // cells the picture wobbles sideways while detuned
+static const float  RF_BLEND       = 0.45;   // the band where the old picture dissolves into the new, share of the height
+static const float  RF_BLOCK       = 4.0;    // the dissolve works in blocks this many cells across
+static const float  RF_ROLL        = 0.5;    // how fast the old picture rolls up and away, against the band
+static const float  RF_SNOW        = 0.45;   // how much static snow in the dissolving band
+static const float  RF_WOBBLE      = 6.0;    // cells the picture wobbles sideways in the band
 
 // --- sprite sheet layout (matches frequency-sprites.py) ---
 static const int    FISH_W = 48, FISH_H = 24, FISH_KINDS = 3, FISH_Y = 0;
@@ -72,14 +74,16 @@ static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;  
 static const int    SHEET_W = 512, SHEET_H = 128;
 
 // --- joins inside the second station ---
-static const float  BANG_SEC        = 1.6;   // the tube of pixelated big bangs that opens the bottle scene
+static const float  BANG_SEC        = 2.4;   // the tube of pixelated big bangs that opens the bottle scene
 static const float  BANG_BLOCK      = 6.0;   // their pixel size, cells
 static const int    BANG_RINGS      = 12;    // big bangs, one after another
 static const float  BANG_GAP        = 0.08;  // seconds between them
 static const float  BANG_GROW       = 3.4;   // how fast each blast front flies out (it grows e times this often a second)
-static const float  BANG_REVEAL     = 0.8;   // seconds in, the bottle starts to open up in the middle
-static const float  BOTTLE_BLEND    = 2.5;   // seconds the bottle's heap takes to dissolve into the tunnel
+static const float  BANG_REVEAL     = 1.1;   // seconds in, the bottle starts to open up in the middle
+static const float  BOTTLE_BLEND    = 4.0;   // seconds the bottle's heap takes to dissolve into the tunnel
 static const float  BLEND_BLOCK     = 6.0;   // size of the blocks it dissolves in, cells
+static const float  BLACKOUT_SEC    = 2.0;   // the swirl glitching away to black
+static const float  PC_LINGER       = 2.5;   // the green computer lines linger this long among the first eyes
 static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
 static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-many seconds
 
@@ -290,7 +294,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; forced = skullTurnGlitch(t); }
     else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; forced = skullTurnGlitch(t + SKULL_SEC); }
     else if (tl < E_BRIGHT) { id = S_BRIGHT; t = tl - E_SKULL; forced = 0.8 * saturate((tl - (E_BRIGHT - 1.5)) / 1.5); }
-    else if (tl < E_RF2)    { id = S_BRIGHT; t = tl - E_SKULL; idB = S_POLKA; tB = tl - E_BRIGHT; rf = (tl - E_BRIGHT) / RF_SEC; rfHeavy = 0.9; }
+    else if (tl < E_RF2)    { id = S_BRIGHT; t = tl - E_SKULL; idB = S_POLKA; tB = tl - E_BRIGHT; rf = (tl - E_BRIGHT) / RF_SEC; rfHeavy = 0.5; }
     else if (tl < E_POLKA)  { id = S_POLKA; t = tl - E_BRIGHT; }
     else if (tl < E_RF3)    { id = S_POLKA; t = tl - E_BRIGHT; idB = S_TV; tB = tl - E_POLKA; rf = (tl - E_POLKA) / RF_SEC; rfHeavy = 0.3; }
     else if (tl < E_TV)     { id = S_TV; t = tl - E_POLKA; }
@@ -301,13 +305,13 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; float pb = wrap(t, SUB_PHASE_SEC);
                               forced = t > 1.0 && t < SUBURB_SEC - SUB_DIVE && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
     else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; }
-    else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = saturate((tl - (E_WARP - 1.2)) / 1.2); blackout = saturate((tl - (E_WARP - 0.8)) / 0.8); }
-    else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.8 * saturate(1.0 - (tl - E_WARP) / 0.6); }
+    else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = 0.7 * saturate((tl - (E_WARP - BLACKOUT_SEC)) / BLACKOUT_SEC); blackout = saturate((tl - (E_WARP - BLACKOUT_SEC)) / BLACKOUT_SEC); }
+    else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.5 * saturate(1.0 - (tl - E_WARP) / 1.0); }
     else if (tl < E_EYES)   { id = S_EYES; t = tl - E_PC; }
     else if (tl < E_LIPS)   { id = S_LIPS; t = tl - E_EYES; }
     else if (tl < E_THROAT) { id = S_THROAT; t = tl - E_LIPS; }
     else if (tl < E_CITY)   { id = S_CITY; t = tl - E_THROAT; }
-    else                    { id = S_CITY; t = tl - E_THROAT; idB = S_FISH; tB = 0.0; rf = (tl - E_CITY) / RF_SEC; rfHeavy = 0.9; }
+    else                    { id = S_CITY; t = tl - E_THROAT; idB = S_FISH; tB = 0.0; rf = (tl - E_CITY) / RF_SEC; rfHeavy = 0.5; }
 
     // glitch strength now: the random kind outside the planned changes, the planned kind inside them
     float seed;
@@ -352,6 +356,13 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         if (bangD > bangR) id = S_BLANK;
     }
 
+    // the green computer lines linger among the first eyes, fewer and fewer blocks of them
+    if (id == S_EYES && t < PC_LINGER && hash2(floor(c / (BLEND_BLOCK * gBase)) + 7.5) > smoothstep(0.0, 1.0, t / PC_LINGER))
+    {
+        id = S_PC;
+        t  = PC_SEC + t;
+    }
+
     // the bottle's heap dissolves into the tunnel block by block
     if (id == S_WARP && t < BOTTLE_BLEND && hash2(floor(c / (BLEND_BLOCK * gBase)) + 0.5) > smoothstep(0.0, 1.0, t / BOTTLE_BLEND))
     {
@@ -383,23 +394,25 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         if (hash2(float2(band, 7.0)) < tear * 0.9) { id = S_ZOOM; t = 0.0; cc = c; }
     }
 
-    // a radio-frequency swap: the old picture rolls up and away, a black bar, then the new one
+    // a radio-frequency swap: a band rises up the screen; below it the new station is already
+    // playing, above it the old one is rolling away, and inside it the two dissolve into each
+    // other block by block through the static, so one picture rolls over into the next
     float rfBell = rf >= 0.0 ? bell(rf) : 0.0;
-    bool  bar = false;
+    float rfBand = 0.0;
     if (rf >= 0.0)
     {
-        float barH = floor(grid.y * RF_BAR);
-        float roll = floor(smoothstep(0.15, 0.85, rf) * (grid.y + barH));
-        cc.x += floor(sin(c.y * 0.09 + T * 37.0) * RF_WOBBLE * rfBell);
-        float y = cc.y + roll;
-        if (y >= grid.y + barH) { id = idB; t = tB; cc.y = y - grid.y - barH; }
-        else if (y >= grid.y)   { bar = true; }
-        else                    { cc.y = y; }
+        float band = floor(grid.y * RF_BLEND);
+        float roll = smoothstep(0.0, 1.0, rf) * (grid.y + band);
+        float u    = saturate((c.y - (grid.y - roll - band)) / band);      // 0 above the band, 1 below it
+        rfBand = bell(u);
+        cc.x += floor(sin(c.y * 0.09 + T * 37.0) * RF_WOBBLE * rfBand * rfBell);
+        if (hash2(floor(c / (RF_BLOCK * gBase)) + floor(T * 12.0) * 0.37) < u) { id = idB; t = tB; }
+        else cc.y += floor(roll * RF_ROLL);
     }
 
     // the zoom gives way to the cubes cell by cell, in a dither, so only one picture is drawn
     if (zoomMix > 0.65 && hash2(c + floor(T * 20.0)) < smoothstep(0.65, 1.0, zoomMix)) { id = S_SPACE; t = tl - E_ZOOM; cc = c; }
-    float3 col = bar ? float3(0, 0, 0) : sceneColour(id, cc, grid, t);
+    float3 col = sceneColour(id, cc, grid, t);
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
     if (gline) col = lerp(col * 1.2, hue(hash2(float2(lrow, lslot + 2.0))), 0.2);
@@ -442,9 +455,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         float n    = hash2(c + floor(T * 30.0) * 17.31);
         float f    = lerp(0.04, 0.6, rf);
         float bars = sin(c.y * f + sin(c.x * 0.03 + T * 9.0) * 4.0);
-        if (bars > 0.55) col = lerp(col, hue(frac(c.y * 0.01 + T * 1.7)) * (0.6 + 0.4 * bars), 0.45 * rfBell);
-        col = lerp(col, float3(n, n, n) * (bar ? 0.5 : 1.0), RF_SNOW * rfBell);
-        if (bar && abs(c.y - floor(grid.y * 0.5)) < 1.0) col = float3(0.9, 0.9, 1.0) * rfBell;
+        if (bars > 0.55) col = lerp(col, hue(frac(c.y * 0.01 + T * 1.7)) * (0.6 + 0.4 * bars), 0.45 * rfBand);
+        col = lerp(col, float3(n, n, n), RF_SNOW * rfBand);
     }
 
     // fade to black at the left and right, in dithered steps so it stays pixel-art
