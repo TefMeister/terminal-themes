@@ -5,6 +5,7 @@
     python sample-text.py static                   the lines appear at once and stay (for the
                                                    ocean, whose own loop mode sets the length)
     python sample-text.py static halloween         the same, with lines for the Halloween style
+    python sample-text.py static frequency         the same, with lines for the frequency style
 
 The cursor is hidden throughout: a blinking cursor would never be in step with the loop.
 """
@@ -36,6 +37,17 @@ HALLOWEEN = [
     ("", 0),
     ("> ", 0),
 ]
+FREQUENCY = [
+    ("> make the background keep changing station, like someone spinning a radio dial", 0.02),
+    ("", 0),
+    ("● Tuning in. Fish bones, skulls, polka dots, an old cartoon and an asteroid field, in that order.", 0.015),
+    ("", 0),
+    ("● Write styles/frequency/frequency.hlsl", 0.01),
+    ("", 0),
+    ("● Done. It loops back to the fish bones about every minute and a half.", 0.015),
+    ("", 0),
+    ("> ", 0),
+]
 CLEAR = "\033[2J\033[H"
 HIDE_CURSOR = "\033[?25l"
 
@@ -50,10 +62,12 @@ def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "typing"
     if "halloween" in sys.argv[2:]:
         LINES = HALLOWEEN
+    if "frequency" in sys.argv[2:]:
+        LINES = FREQUENCY
     out(CLEAR + HIDE_CURSOR)
     if mode == "static":
         out("\n".join(text for text, _ in LINES))
-        time.sleep(90.0)
+        time.sleep(150.0)
         return
     loop = float(sys.argv[2]) if len(sys.argv) > 2 else 18.0
     t0 = time.perf_counter()

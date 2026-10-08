@@ -1,0 +1,37 @@
+{
+    "_comment": "Paste the profile into profiles -> list and the scheme into schemes in Windows Terminal's settings.json. Replace <FOLDER> with where you put these files, using forward slashes. The scheme's background must stay pure black: the shader treats anything that is not black as text.",
+    "profile": {
+        "name": "Frequency Claude",
+        "commandline": "claude.exe",
+        "colorScheme": "Frequency",
+        "cursorShape": "bar",
+        "padding": "16",
+        "font": { "face": "Cascadia Code", "size": 13 },
+        "icon": "📻",
+        "experimental.pixelShaderPath": "<FOLDER>/styles/frequency/frequency.hlsl",
+        "experimental.pixelShaderImagePath": "<FOLDER>/styles/frequency/frequency-sheet.png"
+    },
+    "scheme": {
+        "name": "Frequency",
+        "background": "#000000",
+        "foreground": "#F0EEF6",
+        "cursorColor": "#FF5FD2",
+        "selectionBackground": "#3A2A5E",
+        "black": "#000000",
+        "red": "#FF6B7A",
+        "brightRed": "#FF9CA6",
+        "green": "#7CF0A0",
+        "brightGreen": "#B0FFC8",
+        "yellow": "#FFE27A",
+        "brightYellow": "#FFF0B0",
+        "blue": "#7AB8FF",
+        "brightBlue": "#AED4FF",
+        "purple": "#D69BFF",
+        "brightPurple": "#E8C8FF",
+        "cyan": "#6EF2F2",
+        "brightCyan": "#A8FFFF",
+        "white": "#DAD6E4",
+        "brightWhite": "#FFFFFF",
+        "brightBlack": "#8C84A0"
+    }
+}

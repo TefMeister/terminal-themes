@@ -1,4 +1,4 @@
-"""Adds five temporary "Preview: ..." profiles to Windows Terminal, one per style, for recording
+"""Adds six temporary "Preview: ..." profiles to Windows Terminal, one per style, for recording
 the clips; removes them again afterwards.
 
     python add-profiles.py add       backs settings.json up, then adds the profiles
@@ -54,6 +54,8 @@ BLOCK = BEGIN + "".join([
             HERE + "/ocean-loop.hlsl", STYLES + "ocean/ocean-sheet.png", "bar", "static"),
     profile("Preview: halloween", "Halloween", "Cascadia Code", 13,
             HERE + "/halloween-loop.hlsl", STYLES + "halloween/halloween-sheet.png", "bar", "static halloween"),
+    profile("Preview: frequency", "Frequency", "Cascadia Code", 13,
+            STYLES + "frequency/frequency.hlsl", STYLES + "frequency/frequency-sheet.png", "bar", "static frequency"),
 ]) + END
 
 
@@ -79,7 +81,7 @@ def main():
         m = re.search(rb'"list":\s*\[\s*\n', raw)
         assert m, "profiles list not found in settings.json"
         open(SETTINGS, "wb").write(raw[:m.end()] + BLOCK.encode("utf-8") + raw[m.end():])
-        print("added 5 preview profiles; backup at", BACKUP)
+        print("added 6 preview profiles; backup at", BACKUP)
     elif mode == "remove":
         a, b = raw.find(BEGIN.encode()), raw.find(END.encode())
         assert a >= 0 and b > a, "preview block not found"

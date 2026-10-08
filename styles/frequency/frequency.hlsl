@@ -1,0 +1,293 @@
+// Frequency: a pixel-art background that keeps changing station, drawn behind the text.
+// One loop of about a minute and a half, then back to the very first frame:
+//   fish bones crossing at 2 frames a second -> (radio swap) -> skulls flying diagonally at 30 ->
+//   the picture cracks into boxes that crumble away, showing a brighter world underneath ->
+//   (glitch, radio swap) -> polka dots humming on unstable electricity -> (radio swap) ->
+//   an old wooden TV showing a 1930s cartoon dog in trousers jogging, the camera following ->
+//   a heavy glitch tears it apart, it zooms into a distant pattern, flies into a gridded
+//   asteroid field and pans around -> (glitch, radio swap) -> the fish bones again.
+// On top of that, random glitches in psychedelic colours come and go at random times.
+// The scenes are in frequency-scenes.hlsli, frequency-tv.hlsli and frequency-space.hlsli, which
+// must stay next to this file. Sprites come from frequency-sheet.png (drawn by frequency-sprites.py;
+// the sheet constants below must match). The colour scheme's background must be pure black.
+Texture2D shaderTexture;
+Texture2D image;
+SamplerState samplerState;
+cbuffer PixelShaderSettings { float Time; float Scale; float2 Resolution; float4 Background; };
+
+// --- the pixel look ---
+static const float  CELL_PIXELS    = 2.0;    // screen pixels per pixel-art pixel (small = finer)
+static const float  SCENE_BRIGHT   = 0.50;   // overall picture brightness (text is not affected)
+static const float  SIDE_FADE      = 0.04;   // share of the width over which each side fades to black
+static const float  BASE_ROWS      = 330.0;  // sprites grow one size step for every this many pixel-art rows of window height
+
+// --- how long each part lasts, in seconds ---
+static const float  FISH_SEC       = 14.0;
+static const float  RF_SEC         = 2.0;    // each radio-frequency swap
+static const float  SKULL_SEC      = 11.0;
+static const float  CRUMBLE_SEC    = 5.0;
+static const float  BRIGHT_SEC     = 6.0;
+static const float  POLKA_SEC      = 12.0;
+static const float  TV_SEC         = 16.0;
+static const float  TEAR_SEC       = 2.5;
+static const float  ZOOM_SEC       = 2.5;
+static const float  SPACE_SEC      = 15.0;
+static const float  START_AT       = 0.0;    // for trying things out: start this many seconds into the loop
+
+// --- random glitches between the planned ones ---
+static const float  GLITCH_STRENGTH = 1.0;   // 0 switches the random glitches off; planned ones stay
+static const float  GLITCH_WINDOW  = 7.0;    // each window of this many seconds may hold one glitch
+static const float  GLITCH_CHANCE  = 0.6;    // share of windows that do
+static const float  GLITCH_MIN     = 0.15;   // shortest glitch, seconds
+static const float  GLITCH_MAX     = 2.2;    // longest glitch, seconds
+static const float  GLITCH_RATE_LO = 6.0;    // a glitch changes its look this many times a second...
+static const float  GLITCH_RATE_HI = 18.0;   // ...up to this many (kept low, so it never strobes hard)
+
+// --- radio-frequency swaps ---
+static const float  RF_BAR         = 0.08;   // the black bar that rolls past, share of the height
+static const float  RF_SNOW        = 0.7;    // how much static snow at the middle of a swap
+static const float  RF_WOBBLE      = 6.0;    // cells the picture wobbles sideways while detuned
+
+// --- sprite sheet layout (matches frequency-sprites.py) ---
+static const int    FISH_W = 48, FISH_H = 24, FISH_KINDS = 3, FISH_Y = 0;
+static const int    SKULL_S = 24, SKULL_KINDS = 4, SKULL_Y = 24;
+static const int    DOG_S = 64, DOG_FRAMES = 8, DOG_Y = 48;
+static const int    SHEET_W = 512, SHEET_H = 128;
+
+// --- user messages (same marker the other styles use) ---
+static const float3 MARKER         = float3(0.0, 0.0, 3.0 / 255.0);
+static const float3 USER_COLOUR    = float3(1.00, 0.86, 0.55);
+static const int    ROW_SAMPLES    = 48;
+
+static const float  TAU            = 6.28318530718;
+static const float  BAYER[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
+
+// the timeline: where each part ends
+static const float  E_FISH   = FISH_SEC;
+static const float  E_RF1    = E_FISH + RF_SEC;
+static const float  E_SKULL  = E_RF1 + SKULL_SEC;
+static const float  E_CRUMB  = E_SKULL + CRUMBLE_SEC;
+static const float  E_BRIGHT = E_CRUMB + BRIGHT_SEC;
+static const float  E_RF2    = E_BRIGHT + RF_SEC;
+static const float  E_POLKA  = E_RF2 + POLKA_SEC;
+static const float  E_RF3    = E_POLKA + RF_SEC;
+static const float  E_TV     = E_RF3 + TV_SEC;
+static const float  E_TEAR   = E_TV + TEAR_SEC;
+static const float  E_ZOOM   = E_TEAR + ZOOM_SEC;
+static const float  E_SPACE  = E_ZOOM + SPACE_SEC;
+static const float  LOOP_SEC = E_SPACE + RF_SEC;
+
+// scene numbers
+static const int    S_FISH = 0, S_SKULL = 1, S_CRUMBLE = 2, S_BRIGHT = 3, S_POLKA = 4, S_TV = 5, S_ZOOM = 6, S_SPACE = 7, S_BLANK = 8;
+
+// set once per pixel in main()
+static bool  gSprites;
+static float gBase;
+
+float hash(float n) { return frac(sin(n * 127.1 + 11.7) * 43758.5453); }
+float hash2(float2 p) { return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
+float3 hash3(float3 p)
+{
+    p = frac(p * float3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz + 33.33);
+    return frac((p.xxy + p.yxx) * p.zyx);
+}
+float dither(float2 c) { int2 i = int2(c); return (BAYER[(i.y & 3) * 4 + (i.x & 3)] + 0.5) / 16.0; }
+float wrap(float x, float m) { return x - m * floor(x / m); }
+float3 hue(float h) { return saturate(abs(frac(h + float3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0); }
+float luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
+float3 hueRotate(float3 c, float a)
+{
+    const float3 k = 0.57735;
+    float ca = cos(a);
+    return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
+}
+// a smooth bump: 0 at both ends of 0..1, 1 in the middle
+float bell(float p) { return sin(saturate(p) * 3.14159265); }
+
+// one sprite pixel, scaled up by a whole number and optionally mirrored; alpha 0 outside the sprite
+float4 sprite(int2 origin, int2 size, float2 local, float sc, bool flip)
+{
+    int2 p = int2(floor(local / sc));
+    if (p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y) return float4(0, 0, 0, 0);
+    if (flip) p.x = size.x - 1 - p.x;
+    return image.Load(int3(origin + p, 0));
+}
+
+#include "frequency-scenes.hlsli"
+#include "frequency-tv.hlsli"
+#include "frequency-space.hlsli"
+
+float3 sceneColour(int id, float2 c, float2 grid, float t)
+{
+    [branch] if (id == S_FISH)    return fishScene(c, grid, t);
+    [branch] if (id == S_SKULL)   return skullScene(c, grid, t);
+    [branch] if (id == S_CRUMBLE) return crumbleScene(c, grid, t);
+    [branch] if (id == S_BRIGHT)  return brightWorld(c, grid, t);
+    [branch] if (id == S_POLKA)   return polkaScene(c, grid, t);
+    [branch] if (id == S_TV)      return tvScene(c, grid, t);
+    [branch] if (id == S_ZOOM)    return zoomScene(c, grid, t);
+    [branch] if (id == S_SPACE)   return spaceScene(c, grid, t);
+    return float3(0, 0, 0);
+}
+
+// --- random glitches: 0 most of the time, then a burst of random length at a random moment ---
+float randomGlitch(float T, out float seed)
+{
+    float w = floor(T / GLITCH_WINDOW);
+    seed = w * 31.7;
+    if (hash(w * 1.73 + 0.3) > GLITCH_CHANCE) return 0.0;
+    float len   = lerp(GLITCH_MIN, GLITCH_MAX, pow(hash(w * 3.3 + 1.1), 2.0));
+    float start = hash(w * 7.1 + 2.9) * (GLITCH_WINDOW - len);
+    float x     = T - w * GLITCH_WINDOW - start;
+    if (x < 0.0 || x > len) return 0.0;
+    float rate  = lerp(GLITCH_RATE_LO, GLITCH_RATE_HI, hash(w * 5.9 + 4.2));
+    float slot  = floor(x * rate);
+    seed = w * 31.7 + slot;
+    float s = hash(seed * 1.31 + 0.7);
+    return (s < 0.2 ? 0.1 : s) * GLITCH_STRENGTH;
+}
+
+// rows and blocks of the picture slide sideways
+float2 glitchCoord(float2 c, float2 grid, float g, float seed)
+{
+    float bandH = floor(lerp(2.0, 26.0, hash(seed * 1.1 + 0.2)));
+    float band  = floor(c.y / bandH);
+    if (hash2(float2(band, seed)) < 0.5 * g)
+        c.x += floor((hash2(float2(band, seed + 5.0)) - 0.5) * grid.x * 0.35 * g);
+    float2 blk = floor(c / float2(28.0, 9.0));
+    if (hash2(blk + seed * 3.1) < 0.1 * g)
+        c += floor((float2(hash2(blk + seed), hash2(blk - seed)) - 0.5) * float2(40.0, 12.0));
+    return c;
+}
+
+// psychedelic recolouring: a different trick each time the glitch changes
+float3 glitchColour(float3 col, float2 c, float g, float seed)
+{
+    float3 orig = col;
+    float  mode = hash(seed * 2.3 + 0.1);
+    float3 tint = hue(hash(seed * 9.7 + 0.4));
+    if (mode < 0.25)      col = frac(col * 3.0 + tint);                          // rainbow contour bands
+    else if (mode < 0.5)  col = saturate(hueRotate(col, hash(seed * 4.4) * TAU) * 1.4);
+    else if (mode < 0.65) col = (1.0 - col) * tint;                              // negative, tinted
+    else if (mode < 0.85) col = lerp(hue(hash(seed * 6.1)), tint, luma(col)) * (0.3 + luma(col) * 1.4);  // two-tone
+    else                  col = floor(col * 3.0) / 2.0 * tint.zxy;              // crushed palette
+    // solid blocks and bright streak lines
+    if (hash2(floor(c / float2(18.0, 6.0)) + seed * 1.7) < 0.06 * g) col = hue(hash2(floor(c / 18.0) + seed));
+    if (hash2(float2(c.y, seed * 0.37)) < 0.025 * g) col = tint * 1.3;
+    return lerp(orig, col, saturate(g * 1.6));
+}
+
+// --- text ---
+bool isMarker(float3 c) { return all(abs(c - MARKER) < 0.5 / 255.0); }
+float ink(float3 c) { return saturate(max(c.r, max(c.g, c.b))); }
+float3 readText(float2 uv)
+{
+    float3 c = shaderTexture.Sample(samplerState, uv).rgb;
+    if (isMarker(c)) c = float3(0, 0, 0);
+    bool userRow = false;
+    for (int i = 0; i < ROW_SAMPLES; i++)
+    {
+        float x = (i + 0.5) / ROW_SAMPLES;
+        if (isMarker(shaderTexture.Sample(samplerState, float2(x, uv.y)).rgb)) { userRow = true; break; }
+    }
+    if (userRow) c = USER_COLOUR * ink(c);
+    return c;
+}
+float screenFade(float2 tex) { return smoothstep(0.0, 1.0, saturate(min(tex.x, 1.0 - tex.x) / SIDE_FADE)); }
+
+float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
+{
+    float  s    = max(Scale, 1.0);
+    float  size = CELL_PIXELS * s;
+    float2 c    = floor(pos.xy / size);
+    float2 grid = floor(Resolution / size);
+    float  T    = Time;
+    float  tl   = wrap(T + START_AT, LOOP_SEC);
+
+    uint iw, ih;
+    image.GetDimensions(iw, ih);
+    gSprites = (int)iw == SHEET_W && (int)ih == SHEET_H;
+    gBase    = max(1.0, floor(grid.y / BASE_ROWS + 0.5));
+
+    // which part of the loop we are in
+    int   id = S_FISH, idB = S_FISH;
+    float t = tl, tB = 0.0, rf = -1.0, rfHeavy = 0.0, tear = -1.0, zoomMix = -1.0, forced = 0.0;
+    if      (tl < E_FISH)   { id = S_FISH; t = tl; }
+    else if (tl < E_RF1)    { id = S_FISH; t = tl; idB = S_SKULL; tB = tl - E_FISH; rf = (tl - E_FISH) / RF_SEC; rfHeavy = 0.3; }
+    else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; }
+    else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; }
+    else if (tl < E_BRIGHT) { id = S_BRIGHT; t = tl - E_SKULL; forced = 0.8 * saturate((tl - (E_BRIGHT - 1.5)) / 1.5); }
+    else if (tl < E_RF2)    { id = S_BRIGHT; t = tl - E_SKULL; idB = S_POLKA; tB = tl - E_BRIGHT; rf = (tl - E_BRIGHT) / RF_SEC; rfHeavy = 0.9; }
+    else if (tl < E_POLKA)  { id = S_POLKA; t = tl - E_BRIGHT; }
+    else if (tl < E_RF3)    { id = S_POLKA; t = tl - E_BRIGHT; idB = S_TV; tB = tl - E_POLKA; rf = (tl - E_POLKA) / RF_SEC; rfHeavy = 0.3; }
+    else if (tl < E_TV)     { id = S_TV; t = tl - E_POLKA; }
+    else if (tl < E_TEAR)   { id = S_TV; t = tl - E_POLKA; tear = (tl - E_TV) / TEAR_SEC; }
+    else if (tl < E_ZOOM)   { id = S_ZOOM; t = tl - E_TEAR; zoomMix = (tl - E_TEAR) / ZOOM_SEC; }
+    else if (tl < E_SPACE)  { id = S_SPACE; t = tl - E_ZOOM; forced = 0.6 * saturate((tl - (E_SPACE - 1.0)) / 1.0); }
+    else                    { id = S_SPACE; t = tl - E_ZOOM; idB = S_FISH; tB = 0.0; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.9; }
+
+    // glitch strength now: the random kind outside the planned changes, the planned kind inside them
+    float seed;
+    float g = (rf < 0.0 && tear < 0.0 && zoomMix < 0.0) ? randomGlitch(T, seed) : 0.0;
+    if (rf >= 0.0 || forced > 0.0 || tear >= 0.0)
+    {
+        float rate = 12.0;
+        seed = floor(T * rate) + 977.0;
+        g = max(forced, rf >= 0.0 ? rfHeavy * bell(rf) : 0.0);
+        if (tear >= 0.0) g = 0.4 + 0.5 * tear;
+        g *= 0.4 + 0.6 * hash(seed * 0.71);
+    }
+    float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
+
+    // the heavy tear: bands of the TV picture fly apart, and the gaps open onto a far-off pattern
+    if (tear >= 0.0)
+    {
+        float tick  = floor(T * 12.0);
+        float bandH = floor(lerp(3.0, 20.0, hash(tick * 0.37 + 0.5)));
+        float band  = floor(c.y / bandH);
+        float k     = tear * tear;
+        cc.x += floor((hash2(float2(band, tick)) - 0.5) * grid.x * 0.9 * k);
+        cc.y += floor((hash2(float2(band, tick + 1.0)) - 0.5) * grid.y * 0.25 * k);
+        if (hash2(float2(band, 7.0)) < tear * 0.9) { id = S_ZOOM; t = 0.0; cc = c; }
+    }
+
+    // a radio-frequency swap: the old picture rolls up and away, a black bar, then the new one
+    float rfBell = rf >= 0.0 ? bell(rf) : 0.0;
+    bool  bar = false;
+    if (rf >= 0.0)
+    {
+        float barH = floor(grid.y * RF_BAR);
+        float roll = floor(smoothstep(0.15, 0.85, rf) * (grid.y + barH));
+        cc.x += floor(sin(c.y * 0.09 + T * 37.0) * RF_WOBBLE * rfBell);
+        float y = cc.y + roll;
+        if (y >= grid.y + barH) { id = idB; t = tB; cc.y = y - grid.y - barH; }
+        else if (y >= grid.y)   { bar = true; }
+        else                    { cc.y = y; }
+    }
+
+    float3 col = bar ? float3(0, 0, 0) : sceneColour(id, cc, grid, t);
+    [branch] if (zoomMix > 0.65)
+        col = lerp(col, spaceScene(c, grid, tl - E_ZOOM), smoothstep(0.65, 1.0, zoomMix));
+
+    if (g > 0.0) col = glitchColour(col, c, g, seed);
+
+    // the radio part of the swap: static snow and interference bars sweeping through the frequencies
+    if (rf >= 0.0)
+    {
+        float n    = hash2(c + floor(T * 30.0) * 17.31);
+        float f    = lerp(0.04, 0.6, rf);
+        float bars = sin(c.y * f + sin(c.x * 0.03 + T * 9.0) * 4.0);
+        if (bars > 0.55) col = lerp(col, hue(frac(c.y * 0.01 + T * 1.7)) * (0.6 + 0.4 * bars), 0.45 * rfBell);
+        col = lerp(col, float3(n, n, n) * (bar ? 0.5 : 1.0), RF_SNOW * rfBell);
+        if (bar && abs(c.y - floor(grid.y * 0.5)) < 1.0) col = float3(0.9, 0.9, 1.0) * rfBell;
+    }
+
+    // fade to black at the left and right, in dithered steps so it stays pixel-art
+    float fade = screenFade(tex);
+    col = saturate(col) * saturate(floor(fade * 6.0 + dither(c)) / 6.0) * SCENE_BRIGHT;
+
+    // letters on top, crisp; the picture fades out underneath them so they stay readable
+    float3 text = readText(tex);
+    return float4(text + col * (1.0 - ink(text)), 1.0);
+}
