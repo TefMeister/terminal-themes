@@ -25,6 +25,8 @@ REAL = [
     "10001 10001 10001 10001 10001 10001 01110", "10000 10000 10000 10000 10000 10000 11111",
 ]
 MADE_UP = 32
+MIRROR_CHANCE = 0.4    # share of made-up letters drawn symmetrical
+DOT_CHANCE = 0.3       # share that get a loose dot
 LATTICE = [(x, y) for y in (0, 3, 6) for x in (0, 2, 4)]   # 3 x 3 points inside the 5 x 7 box
 
 
@@ -43,9 +45,9 @@ def made_up(seed):
         a = rnd.choice(LATTICE)
         near = [p for p in LATTICE if p != a and abs(p[0] - a[0]) <= 2 and abs(p[1] - a[1]) <= 3]
         _line(px, a, rnd.choice(near))
-    if rnd.random() < 0.4:
+    if rnd.random() < MIRROR_CHANCE:
         px |= {(4 - x, y) for x, y in px}
-    if rnd.random() < 0.3:
+    if rnd.random() < DOT_CHANCE:
         px.add((rnd.choice((1, 3)), rnd.choice((1, 5))))   # a loose dot
     return px
 
