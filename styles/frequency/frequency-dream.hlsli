@@ -15,6 +15,9 @@ static const float3 SUB_SKY_TOP[3] = { float3(0.35, 0.60, 0.95), float3(0.95, 0.
 static const float3 SUB_SKY_LOW[3] = { float3(0.82, 0.92, 1.00), float3(1.00, 0.85, 0.55), float3(0.58, 0.58, 0.64) };
 static const float3 SUB_LIGHT[3]   = { float3(1.00, 1.00, 1.00), float3(1.10, 0.88, 0.70), float3(0.62, 0.64, 0.72) };  // how each town is lit
 static const float3 SUB_HILL       = float3(0.42, 0.62, 0.55);
+static const float  SUB_DEPTH      = 7.0;    // how far back each house reaches, cells at the smallest size
+static const float  SUB_SHADOW     = 0.6;    // how dark shadows on the lawn are
+static const float  SUB_HAZE       = 0.45;   // how much the furthest rows fade into the sky
 static const float3 SUB_GRASS_A    = float3(0.36, 0.72, 0.30);
 static const float3 SUB_GRASS_B    = float3(0.30, 0.63, 0.25);
 static const float3 SUB_ROAD       = float3(0.36, 0.36, 0.40);
@@ -43,13 +46,15 @@ static const float  SUB_FRAG       = 0.35;   // share of the picture broken into
 static const float  SUB_FRAG_BLOCK = 10.0;   // size of those blocks, cells
 
 // --- the bottle ---
-static const float  BOTTLE_TIP_SEC = 1.0;    // it starts pouring this many seconds in
-static const float  BOTTLE_TILT_FROM = 0.25; // radians it leans to the right at first...
-static const float  BOTTLE_TILT    = 1.35;   // ...and at the end
-static const float  BOTTLE_BIG     = 0.95;   // its height at the start, share of the window
-static const float  BOTTLE_SIZE    = 2.0;    // its size at the end, in sprite sizes
-static const float2 BOTTLE_AT      = float2(0.18, 0.62);   // where it stands, share of the window
-static const float  BOTTLE_THROW   = 0.75;   // how fast the letters leave the neck, window widths per second
+static const float  BOTTLE_TIP_SEC = 1.2;    // it starts pouring this many seconds in
+static const float  BOTTLE_TILT_FROM = 0.4;  // radians it leans to the right at first...
+static const float  BOTTLE_TILT    = 2.3;    // ...and once it is pouring, neck down to the right
+static const float  BOTTLE_BIG     = 0.95;   // its height at the start, share of the window; it shrinks to nothing
+static const float  BOTTLE_TRAVEL  = 0.92;   // share of BOTTLE_SEC it takes to cross and vanish
+static const float2 BOTTLE_FROM    = float2(0.12, 0.62);   // where it starts, share of the window...
+static const float2 BOTTLE_TO      = float2(0.95, 0.50);   // ...where it ends...
+static const float  BOTTLE_ARC     = 0.45;   // ...and how high it arcs over the top in between
+static const float  BOTTLE_THROW   = 0.15;   // how fast the letters leave the neck, window widths per second
 static const float  BOTTLE_DROP    = 1.1;    // how fast they fall, window widths per second per second
 static const float  BOTTLE_SPOUT   = 0.035;  // seconds between letters pouring out
 static const int    BOTTLE_STREAM  = 48;     // letters in the air at once
@@ -164,6 +169,8 @@ float3 suburbTown(float2 c, float2 grid, float t, int set)
     // lawns with mowing stripes, then rows of houses from far to near
     float v = (c.y - hy) / (grid.y - hy);
     float3 col = wrap(floor((c.x - grid.x * 0.5) / ((1.0 + v * 10.0) * 4.0)), 2.0) < 1.0 ? SUB_GRASS_A : SUB_GRASS_B;
+    col *= lerp(1.05, 0.85, v);                                                // the near lawn a little darker
+    float depth = v;                                                           // how near whatever is drawn here is
     [loop] for (int r = 0; r < SUB_ROWS; r++)
     {
         float rv   = pow((r + 1.0) / SUB_ROWS, 1.5);
@@ -186,24 +193,57 @@ float3 suburbTown(float2 c, float2 grid, float t, int set)
         float kind = hash(id);
         if (kind < 0.12)                                                       // a round tree instead of a house
         {
-            if (abs(lx - 15.0 * s) < 1.5 * s && ly > 0.0 && ly < 12.0 * s) col = float3(0.40, 0.26, 0.15);
-            if (length(float2(lx - 15.0 * s, ly - 18.0 * s)) < 9.0 * s) col = SUB_TREE * (hash2(floor(c / 2.0)) > 0.7 ? 0.8 : 1.0);
+            if (length(float2(lx - 21.0 * s, ly + 1.0 * s) / float2(11.0, 2.2) / s) < 1.0) col *= SUB_SHADOW;   // its shadow
+            if (abs(lx - 15.0 * s) < 1.5 * s && ly > 0.0 && ly < 12.0 * s) { col = float3(0.40, 0.26, 0.15) * (lx < 15.0 * s ? 1.0 : 0.7); depth = rv; }
+            float2 tq = float2(lx - 15.0 * s, ly - 18.0 * s);
+            if (length(tq) < 9.0 * s)
+            {
+                // lit from the upper left: lighter on that side, darker underneath and to the right
+                float lit = saturate(0.6 - dot(tq / (9.0 * s), float2(0.6, -0.5)) * 0.6);
+                col = SUB_TREE * (0.65 + 0.55 * floor(lit * 4.0) / 4.0) * (hash2(floor(c / 2.0)) > 0.7 ? 0.85 : 1.0);
+                depth = rv;
+            }
             continue;
         }
         if (kind < 0.2)                                                        // or two pines
         {
             float px = wrap(lx, 15.0 * s) - 7.5 * s;
-            if (ly > 0.0 && ly < 26.0 * s && abs(px) < (26.0 * s - ly) * 0.25) col = SUB_PINE * (wrap(ly, 4.0 * s) < s ? 0.75 : 1.0);
+            if (ly < 0.0 && ly > -2.5 * s && px > -3.0 * s && px < 7.0 * s) col *= SUB_SHADOW;
+            if (ly > 0.0 && ly < 26.0 * s && abs(px) < (26.0 * s - ly) * 0.25)
+            {
+                col = SUB_PINE * (wrap(ly, 4.0 * s) < s ? 0.75 : 1.0) * (px < 0.0 ? 1.1 : 0.75);
+                depth = rv;
+            }
             continue;
         }
-        float4 h = houseAt(lx, ly, s, id);
-        if (h.a > 0.0) col = h.rgb;
+        // the house as a solid block: its front, and behind it the same shape stepped back up and to
+        // the right in darker shades, so its side and the slope of its roof show
+        // (one loop over the copies, plus one look for its shadow, so the shape is built only once
+        // in the shader, which keeps it quick to load)
+        float4 h = float4(0, 0, 0, 0);
+        bool   shadow = false;
+        [loop] for (int j = 0; j <= 4; j++)
+        {
+            if (j == 4 && !(ly < 0.0 && ly > -3.0 * s)) break;
+            float  kk = SUB_DEPTH * s * min(j, 3) / 3.0;
+            float2 at = j < 4 ? float2(lx - kk, ly - 0.6 * kk) : float2(lx - 5.0 * s, s);   // the last look: its shadow on the lawn, cast to the right
+            float4 bk = houseAt(at.x, at.y, s, id);
+            if (bk.a > 0.0)
+            {
+                if (j < 4) h = float4(bk.rgb * (j == 0 ? 1.0 : lerp(0.72, 0.5, j / 3.0)), 1);
+                else shadow = true;
+                break;
+            }
+        }
+        if (shadow) col *= SUB_SHADOW;
+        if (h.a > 0.0) { col = h.rgb * lerp(0.85, 1.0, saturate(ly / (4.0 * s))); depth = rv; }   // darker at the foot of the walls
         if (ly > 0.0 && ly < 3.0 * s && wrap(lx + 3.0 * s, 9.0 * s) < 5.0 * s && hash(id + 11.0) > 0.4 && length(float2(wrap(lx + 3.0 * s, 9.0 * s) - 2.5 * s, ly) / float2(2.5, 3.0) / s) < 1.0)
             col = SUB_TREE * 0.85;                                             // bushes along the front
         if (lx > -3.0 * s && lx < -1.0 * s && ly > 0.0 && ly < 5.0 * s)        // a mailbox on a post
             col = ly > 3.0 * s ? float3(0.25, 0.35, 0.65) : float3(0.45, 0.32, 0.2);
     }
-    return col * light;
+    // far things fade into the haze of the sky, so the rows read as further away
+    return lerp(col, SUB_SKY_LOW[set], (1.0 - depth) * SUB_HAZE) * light;
 }
 
 float3 suburbScene(float2 c, float2 grid, float t)
@@ -284,13 +324,14 @@ float3 suburbScene(float2 c, float2 grid, float t)
     return col * (1.0 - smoothstep(0.85, 1.0, dk));                     // and everything goes black
 }
 
-// where the bottle is at a moment: it starts huge and shrinks, leaning further to the right
+// where the bottle is at a moment: it starts huge on the left and arcs over the top to the right,
+// tipped over and pouring, shrinking until it is gone
 void bottlePose(float t, float2 grid, out float2 pivot, out float tilt, out float bs, out float2 tip, out float2 spout)
 {
-    float k = smoothstep(0.0, BOTTLE_SEC, t);
-    bs    = lerp(grid.y * BOTTLE_BIG / 58.0, gBase * BOTTLE_SIZE, k);
-    tilt  = lerp(BOTTLE_TILT_FROM, BOTTLE_TILT, smoothstep(0.0, BOTTLE_SEC * 0.6, t));
-    pivot = grid * BOTTLE_AT;
+    float k = saturate(t / (BOTTLE_SEC * BOTTLE_TRAVEL));
+    bs    = grid.y * BOTTLE_BIG / 58.0 * pow(1.0 - k, 1.3);
+    tilt  = lerp(BOTTLE_TILT_FROM, BOTTLE_TILT, smoothstep(0.0, 0.3, k));
+    pivot = grid * (lerp(BOTTLE_FROM, BOTTLE_TO, k) - float2(0.0, BOTTLE_ARC * sin(k * 3.14159265)));
     tip   = pivot + rot2(float2(0.0, -32.0 * bs), tilt);
     spout = rot2(float2(0.0, -1.0), tilt);
 }
@@ -312,7 +353,7 @@ float3 bottleScene(float2 c, float2 grid, float t)
     float  speed = grid.x * BOTTLE_THROW, drop = grid.x * BOTTLE_DROP;
 
     // the heap of matter at the bottom, growing until it fills the window
-    float land = clamp(tip.x + spout.x * speed * (-2.0 * spout.y * speed / drop) + grid.x * 0.08, grid.x * 0.35, grid.x * 0.95);
+    float land = clamp(tip.x, grid.x * 0.15, grid.x * 0.9);
     float rise = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.6);
     float B    = 6.0 * s;
     float bx   = floor(c.x / B);
@@ -330,7 +371,9 @@ float3 bottleScene(float2 c, float2 grid, float t)
             if (n * BOTTLE_SPOUT < BOTTLE_TIP_SEC) break;
             float2 ep, et, es; float etl, ebs;                              // where the bottle was when it left
             bottlePose(n * BOTTLE_SPOUT, grid, ep, etl, ebs, et, es);
-            float2 v0  = es * speed * (0.85 + 0.3 * hash(n)) + float2(0.0, (hash(n + 3.0) - 0.5) * 0.1 * speed);
+            float2 ep2, et2, es2; float etl2, ebs2;                        // the bottle's own movement carries them on
+            bottlePose(n * BOTTLE_SPOUT + 0.05, grid, ep2, etl2, ebs2, et2, es2);
+            float2 v0  = es * speed * (0.85 + 0.3 * hash(n)) + (et2 - et) / 0.05 + float2((hash(n + 3.0) - 0.5) * 0.2 * speed, 0.0);
             float2 pos = et + v0 * age + float2(0.0, 0.5 * drop * age * age);
             float  g   = max(s, floor(ebs * 0.4)) * (1.0 + floor(age * BOTTLE_GROW));
             float2 box = float2(GLYPH_W, GLYPH_H) * g;
@@ -350,6 +393,7 @@ float3 bottleScene(float2 c, float2 grid, float t)
     }
 
     // the bottle itself: glass outline, full of scrolling digits
+    if (bs < 0.3) return col;                                                     // shrunk to nothing
     float2 q = rot2(c - pivot, -tilt) / bs;
     float halfW = q.y > -10.0 ? 12.0 : (q.y > -18.0 ? lerp(4.0, 12.0, (q.y + 18.0) / 8.0) : (q.y > -30.0 ? 4.0 : 5.0));
     if (q.y > -32.0 && q.y < 26.0 && abs(q.x) < halfW)
