@@ -1,7 +1,6 @@
 # Records ONE Windows Terminal window by asking that window to draw itself (PrintWindow), not by
 # copying the screen, so whatever else is open on the screen can never end up in a frame.
 #   .\record-window.ps1 -ProfileName "Preview: ocean" -OutDir frames\ocean -Seconds 42 -IntervalMs 200 -SettleSec 5
-ecord-window.ps1 -ProfileName "Preview: ocean" -OutDir framesocean -Seconds 42 -IntervalMs 200 -SettleSec 5
 param([string]$ProfileName, [string]$OutDir, [int]$Seconds = 5, [int]$IntervalMs = 200,
       [int]$Cols = 136, [int]$Rows = 47, [int]$SettleSec = 12)
 Add-Type -AssemblyName System.Drawing

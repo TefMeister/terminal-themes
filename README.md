@@ -58,6 +58,32 @@ a humpback whale glides across, far off or a little nearer, never close.
 In the terminal the ocean never repeats. For recording it has a loop mode (`LOOP_SECONDS` at the top of `ocean.hlsl`) that
 makes every movement repeat on the dot, so the clip joins up without a seam.
 
+### [`frequency`](styles/frequency/)
+
+**New, still being tuned.** A background that keeps changing station, as if someone were spinning a
+radio dial, in very fine pixel art. One loop lasts about a minute and a half, then it glitches back to
+its very first frame and starts again:
+
+1. Fish bones cross the screen in lanes, stepping along at 2 frames a second.
+2. The radio swaps station (static, wavy interference, the picture rolling away) to skulls in
+   psychedelic colours flying diagonally at a smooth 30 frames a second.
+3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
+   underneath: a striped sunrise over a rushing grid.
+4. It glitches and swaps to polka dots humming on unstable electricity: brown-outs, surges that spit
+   sparks, pulses of current running through them and a dark hum bar rolling up.
+5. Another swap, to an old wooden TV on a papered wall, showing a black-and-white 1930s cartoon: a dog
+   in trousers jogging from left to right with the camera following him, with film grain, scratches
+   and flicker.
+6. A heavy glitch tears the picture apart and dives into a tiny distant pattern, a grid inside a grid,
+   which opens into a gridded asteroid field in "the fifth dimension". The camera flies through and
+   pans round, the rocks slowly swelling and shrinking, then it glitches back to the fish bones.
+
+On top of all that, short glitches in random psychedelic colours come and go at random moments and
+for random lengths. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
+(the planned changes of station stay). How long each part lasts is set there too.
+
+![The frequency style: eight moments from one loop](preview/frequency.png)
+
 ### [`halloween`](styles/halloween/)
 
 **New for October.** A pixel-art graveyard night behind the text, with real depth: a big moon,
@@ -154,6 +180,23 @@ figures in `halloween-zombies.py` and the big trees grown in `halloween-trees.py
 which rewrites `halloween-sheet.png`. The ghost, the lightning, the smoke and the flowers are drawn by
 the shader itself. The shader is split in three: `halloween-cast.hlsli` and `halloween-trees.hlsli`
 must stay next to `halloween.hlsl` if you copy them somewhere else.
+
+## Install (frequency)
+
+1. Download or clone this repo somewhere that will stay put.
+2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
+3. From [`profile-snippet.json`](styles/frequency/profile-snippet.json), paste the `profile` into
+   `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
+   repo, **written with forward slashes**. The font, Cascadia Code, comes with Windows Terminal.
+4. Open a new tab with the **Frequency Claude** profile.
+
+The fish bones, skulls and the cartoon dog are drawn in code by `styles/frequency/frequency-sprites.py`
+(needs Pillow), which rewrites `frequency-sheet.png`. Everything else is drawn by the shader itself,
+which is split in four: `frequency-scenes.hlsli`, `frequency-tv.hlsli` and `frequency-space.hlsli`
+must stay next to `frequency.hlsl`.
+
+**A word of warning:** this style flashes and changes colour suddenly by design. If flashing
+images bother you, set `GLITCH_STRENGTH` to `0`, or pick a calmer style.
 
 ## Tuning
 
