@@ -1,5 +1,5 @@
-// Frequency, part 4: the zoom into a far-off grid pattern, and the flight through a gridded
-// asteroid field "in the fifth dimension". Included by frequency.hlsl.
+// Frequency, part 4: the zoom into a far-off grid pattern, and the flight through an asteroid field
+// of wildly coloured, glitching cubes "in the fifth dimension". Included by frequency.hlsl.
 
 static const float  ZOOM_FROM      = 0.03;   // the pattern starts this small (screen cells per unit)...
 static const float  ZOOM_TO        = 90.0;   // ...and ends this big
@@ -17,7 +17,11 @@ static const int    SPACE_STEPS    = 56;     // how far each ray looks, in voxel
 static const float  SPACE_FAR      = 38.0;   // fog distance
 static const float  SPACE_PAN_AT   = 5.0;    // seconds in, the camera starts to look around
 static const float  SPACE_PAN      = 2.4;    // how far it turns, radians
-static const float  SPACE_GRID_UP  = 16.0;   // grid planes this far above and below
+static const float  SPACE_WILD     = 0.6;    // how far apart in colour the blocks of one rock are (1 = anything)
+static const float  SPACE_CYCLE    = 0.25;   // how fast the colours slide round the rainbow
+static const float  SPACE_GLITCH_RATE  = 6.0;   // rocks pick whether to glitch this many times a second
+static const float  SPACE_GLITCH_SHARE = 0.12;  // share of rocks glitching at any moment
+static const float  SPACE_GLITCH_SHIFT = 5.0;   // how far a glitching rock's rows slide, in blocks
 static const float3 SPACE_BG       = float3(0.03, 0.01, 0.07);
 
 float3 zoomScene(float2 c, float2 grid, float t)
@@ -48,14 +52,23 @@ float3 zoomScene(float2 c, float2 grid, float t)
 }
 
 // is there rock in this voxel? Each lattice block holds at most one rock, kept clear of the
-// camera's own lane, swelling and shrinking a little over time
-bool rockAt(float3 v, float t, out float3 id)
+// camera's own lane, swelling and shrinking a little over time. Now and then a rock glitches:
+// its rows of blocks slide sideways and it blinks in and out.
+bool rockAt(float3 v, float t, out float3 id, out float glitched)
 {
     float3 blk = floor(v / SPACE_CELL);
     id = blk;
+    glitched = 0.0;
     if (blk.x == 0.0 && blk.y == 0.0) return false;
     float3 h = hash3(blk + 0.37);
     if (h.x > SPACE_DENSITY) return false;
+    float slot = floor(t * SPACE_GLITCH_RATE);
+    if (hash3(blk + slot * 0.913).y < SPACE_GLITCH_SHARE)
+    {
+        glitched = 1.0;
+        if (hash(slot * 3.1 + blk.x + blk.z * 7.0) < 0.2) return false;            // blinks out
+        v.x += floor((hash(v.y * 7.3 + slot) - 0.5) * SPACE_GLITCH_SHIFT);         // rows slide
+    }
     float  r   = SPACE_R_MIN + (SPACE_R_MAX - SPACE_R_MIN) * h.y + SPACE_MORPH * sin(t * 0.9 + h.z * TAU);
     float3 mid = blk * SPACE_CELL + SPACE_CELL * 0.5 + (h.zxy - 0.5) * (SPACE_CELL - 2.0 * SPACE_R_MAX - 1.0);
     return length(v + 0.5 - mid) + hash3(v).x * SPACE_BUMP < r;
@@ -80,37 +93,43 @@ float3 spaceScene(float2 c, float2 grid, float t)
     float3 st = sign(rd);
     float3 tDelta = abs(1.0 / rd);
     float3 tMax   = (st * (v - ro) + st * 0.5 + 0.5) * tDelta;
-    float  tHit = -1.0, tCur = 0.0;
+    float  tHit = -1.0, tCur = 0.0, glitched = 0.0;
     int    axis = 0;
     float3 id = 0;
     [loop] for (int i = 0; i < SPACE_STEPS; i++)
     {
-        if (rockAt(v, t, id)) { tHit = tCur; break; }
+        if (rockAt(v, t, id, glitched)) { tHit = tCur; break; }
         if (tMax.x < tMax.y && tMax.x < tMax.z) { v.x += st.x; tCur = tMax.x; tMax.x += tDelta.x; axis = 0; }
         else if (tMax.y < tMax.z)               { v.y += st.y; tCur = tMax.y; tMax.y += tDelta.y; axis = 1; }
         else                                    { v.z += st.z; tCur = tMax.z; tMax.z += tDelta.z; axis = 2; }
     }
 
-    // behind everything: stars and two endless grid planes
+    // behind everything: deep space and stars only
     float3 col = SPACE_BG + float3(0.03, 0.0, 0.05) * (1.0 - abs(rd.y));
-    if (tHit < 0.0 && hash3(floor(rd * 140.0)).x > 0.996) col = float3(0.7, 0.7, 0.9);
-    float plane = rd.y > 0.0 ? ro.y + SPACE_GRID_UP : ro.y - SPACE_GRID_UP;
-    float tp = (plane - ro.y) / rd.y;
-    if (tp > 0.0 && tp < 400.0)
+    if (tHit < 0.0)
     {
-        float2 hp = (ro + rd * tp).xz;
-        float2 gl = abs(frac(hp / 4.0 + 0.5) - 0.5) * 4.0;
-        if (min(gl.x, gl.y) < 0.06 + tp * 0.006) col = lerp(hue(frac(hp.y * 0.004 + t * 0.05)) * 0.8, col, saturate(tp / 160.0));
+        float3 sh = hash3(floor(rd * 140.0));
+        if (sh.x > 0.996) col = float3(0.7, 0.7, 0.9) * (0.6 + 0.4 * sin(t * 3.0 + sh.y * TAU));
+        return col;
     }
-    if (tHit < 0.0) return col;
 
-    // a rock: dark glassy faces with glowing edges, each rock its own shifting colour
+    // a rock: every block face filled with its own wild colour, sliding round the rainbow, with
+    // dark seams between the blocks so they still read as cubes
     float3 hp = ro + rd * tHit;
     float3 f  = frac(hp);
     float2 fu = axis == 0 ? f.yz : (axis == 1 ? f.xz : f.xy);
     float  e  = min(min(fu.x, 1.0 - fu.x), min(fu.y, 1.0 - fu.y));
-    float3 neon = hue(frac(hash3(id).y + t * 0.08 + tHit * 0.01));
-    float  shade = axis == 0 ? 0.6 : (axis == 1 ? 1.0 : 0.8);
-    float3 rock = e < 0.07 + tHit * 0.004 ? neon * 1.2 : neon * 0.2 * shade + 0.03;
+    float3 vh = hash3(v * 1.37 + axis);
+    float  shade = axis == 0 ? 0.7 : (axis == 1 ? 1.0 : 0.85);
+    float3 face = hue(frac(hash3(id).y + vh.x * SPACE_WILD + t * SPACE_CYCLE + (fu.x + fu.y) * 0.15));
+    face = lerp(face, hue(frac(vh.z + t * 0.4)), step(0.8, vh.y));                 // a few odd ones out
+    float3 rock = face * shade * (0.75 + 0.35 * floor(fu.y * 3.0) / 3.0);
+    if (glitched > 0.0)
+    {
+        float row = floor(hp.y * 4.0 + floor(t * 15.0));
+        if (hash(row) < 0.5) rock = 1.0 - rock;                                    // negative stripes
+        if (hash(row * 1.7 + 0.3) < 0.3) rock = hue(hash(row * 2.3)) * 1.3;
+    }
+    if (e < 0.06 + tHit * 0.003) rock = glitched > 0.0 ? float3(1, 1, 1) : rock * 0.15;
     return lerp(rock, col, saturate(tHit / SPACE_FAR));
 }
