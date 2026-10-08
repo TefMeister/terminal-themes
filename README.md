@@ -13,8 +13,8 @@ an exact loop: its last frame runs straight into its first.
 ### [`green-monitor-lanes`](styles/green-monitor-lanes/)
 
 **The default since 2026-10-08, and the look the Lanes plugin ships with.** The same old green
-monitor as the starburst below, but behind the text sits the Lanes Plugin banner, faint and striped,
-in its own green and yellow, with the light slowly running down the screen over it. The whole banner
+monitor as the starburst below, but behind the text sits the Lanes Plugin banner, drawn in one dim,
+striped green (no white, so the letters stay easy to read), with the light slowly running down the screen over it. The whole banner
 fits across the window and stays centred as the window changes size.
 
 ![The green monitor Lanes style](preview/green-monitor-lanes.png)
