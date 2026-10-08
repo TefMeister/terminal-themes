@@ -72,20 +72,25 @@ static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;  
 static const int    SHEET_W = 512, SHEET_H = 128;
 
 // --- joins inside the second station ---
-static const float  BANG_SEC        = 1.8;   // the pixelated big bang that opens the bottle scene
-static const float  BANG_BLOCK      = 6.0;   // its pixel size, cells
+static const float  BANG_SEC        = 1.6;   // the tube of pixelated big bangs that opens the bottle scene
+static const float  BANG_BLOCK      = 6.0;   // their pixel size, cells
+static const int    BANG_RINGS      = 12;    // big bangs, one after another
+static const float  BANG_GAP        = 0.08;  // seconds between them
+static const float  BANG_GROW       = 3.4;   // how fast each blast front flies out (it grows e times this often a second)
+static const float  BANG_REVEAL     = 0.8;   // seconds in, the bottle starts to open up in the middle
 static const float  BOTTLE_BLEND    = 2.5;   // seconds the bottle's heap takes to dissolve into the tunnel
 static const float  BLEND_BLOCK     = 6.0;   // size of the blocks it dissolves in, cells
 static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
 static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-many seconds
 
 // --- thin glitch lines, all the way through ---
-static const float  LINE_RATE       = 20.0;  // the lines change this many times a second
-static const float  LINE_SHARE      = 0.0008; // share of rows hit at any moment (one now and then)
-static const float  LINE_BURST      = 0.004; // ...rising to this in rare short bursts
-static const float  LINE_MIN        = 8.0;   // a line is a short streak this many cells long...
-static const float  LINE_MAX        = 60.0;  // ...up to this, never right across the window
-static const float  LINE_SHIFT      = 14.0;  // how far a hit row slides sideways, cells
+static const float  LINE_RATE       = 12.0;  // the glitch blocks change this many times a second
+static const float  LINE_SHARE      = 0.006; // share of block rows hit at any moment
+static const float  LINE_BURST      = 0.03;  // ...rising to this in rare short bursts
+static const float  LINE_BLOCK_W    = 8.0;   // one glitch block, cells wide...
+static const float  LINE_BLOCK_H    = 5.0;   // ...and tall
+static const float  LINE_RUN        = 6.0;   // a run is up to this many blocks long
+static const float  LINE_PIXEL      = 3.0;   // inside a block the picture turns this chunky, cells
 
 // --- the second station's feeling that something is not quite right ---
 static const float  UNCANNY_WINDOW  = 5.0;   // each window of this many seconds...
@@ -317,16 +322,24 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
 
-    // thin glitch lines: now and then a short streak of a row slides sideways for a moment
+    // glitch blocks: now and then a short run of chunky blocks tears along the block grid, the
+    // picture inside them sliding a block or two sideways and turning coarse, so whatever object
+    // sits there glitches out
     float lslot = floor(T * LINE_RATE);
-    float lrow  = floor(c.y / 2.0);
+    float bw    = LINE_BLOCK_W * gBase, bh = LINE_BLOCK_H * gBase;
+    float lrow  = floor(c.y / bh);
     float lrate = hash(floor(T * 1.5) * 0.77) < 0.06 ? LINE_BURST : LINE_SHARE;
-    float lx0   = hash2(float2(lrow, lslot + 3.0)) * grid.x;
-    float llen  = lerp(LINE_MIN, LINE_MAX, hash2(float2(lrow, lslot + 4.0))) * gBase;
-    bool  gline = hash2(float2(lrow, lslot)) < lrate && c.x >= lx0 && c.x < lx0 + llen;
-    if (gline) cc.x += floor((hash2(float2(lrow, lslot + 1.0)) - 0.5) * LINE_SHIFT * 2.0);
+    float lb0   = floor(hash2(float2(lrow, lslot + 3.0)) * grid.x / bw);
+    float lbx   = floor(c.x / bw);
+    bool  gline = hash2(float2(lrow, lslot)) < lrate && lbx >= lb0 && lbx < lb0 + 1.0 + floor(hash2(float2(lrow, lslot + 4.0)) * LINE_RUN);
+    if (gline)
+    {
+        float px = LINE_PIXEL * gBase;
+        cc = floor((cc + float2((floor(hash2(float2(lrow, lslot + 1.0)) * 5.0) - 2.0) * bw, 0.0)) / px) * px + px * 0.5;
+    }
 
-    // after the dive into the black hole: a pixelated big bang, its blast front opening onto the bottle
+    // after the dive into the black hole: a tube of pixelated big bangs, one after another, their
+    // blast fronts flying out past us, until the bottle opens up in the middle
     float bang = -1.0, bangD = 0.0, bangR = 0.0;
     float2 bangB = 0;
     if (id == S_BOTTLE && t < BANG_SEC)
@@ -334,7 +347,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         float  B = BANG_BLOCK * gBase;
         bangB = floor(c / B);
         bangD = length((bangB + 0.5) * B - grid * SUB_HOLE_AT) / grid.y;
-        bangR = pow(t / BANG_SEC, 0.6) * 1.4;
+        bangR = t < BANG_REVEAL ? 0.0 : pow((t - BANG_REVEAL) / (BANG_SEC - BANG_REVEAL), 1.5) * 1.5;
         bang  = t / BANG_SEC;
         if (bangD > bangR) id = S_BLANK;
     }
@@ -389,14 +402,25 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float3 col = bar ? float3(0, 0, 0) : sceneColour(id, cc, grid, t);
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
-    if (gline) col = lerp(col * 1.3, hue(hash2(float2(lrow, lslot + 2.0))), 0.25);
+    if (gline) col = lerp(col * 1.2, hue(hash2(float2(lrow, lslot + 2.0))), 0.2);
     if (bang >= 0.0)
     {
-        col = lerp(col, float3(1, 1, 1), saturate(1.0 - bang * 6.0) * 0.7);                      // the flash
-        if (bangD > bangR - 0.12 && bangD <= bangR)                                                // the blast front
-            col = lerp(hue(hash2(bangB) + T * 0.5) * 1.5, float3(1, 1, 0.9), pow(saturate((bangD - bangR + 0.12) / 0.12), 3.0));
-        else if (bangD > bangR && bangD < bangR * 1.5 && hash2(bangB + floor(T * 20.0)) > 0.96)   // sparks thrown ahead of it
-            col = hue(hash2(bangB * 1.3)) * (1.0 - bang);
+        float tb = t;
+        col = lerp(col, float3(1, 1, 1), saturate(1.0 - tb * 8.0) * 0.7);                        // the first flash
+        if (bangD > bangR && hash2(bangB + floor(T * 20.0)) > 0.97) col = hue(hash2(bangB * 1.3)) * 0.6;   // sparks in the void
+        [loop] for (int k = 0; k < BANG_RINGS; k++)
+        {
+            float age = tb - k * BANG_GAP;
+            if (age < 0.0) break;
+            float r = 0.02 * exp(age * BANG_GROW);
+            float w = max(0.015, r * 0.1);
+            if (abs(bangD - r) < w)
+            {
+                float edge = saturate((bangD - r + w) / (2.0 * w));
+                col = lerp(hue(frac(k * 0.17 + hash2(bangB) * 0.15 + T * 0.3)) * 1.5, float3(1, 1, 0.9), pow(edge, 3.0));
+                break;
+            }
+        }
     }
 
     // between the throat and the city: a long stretch of grey static that slowly clears
