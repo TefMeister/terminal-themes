@@ -16,6 +16,7 @@ static const float3 SUB_SKY_LOW[3] = { float3(0.82, 0.92, 1.00), float3(1.00, 0.
 static const float3 SUB_LIGHT[3]   = { float3(1.00, 1.00, 1.00), float3(1.10, 0.88, 0.70), float3(0.62, 0.64, 0.72) };  // how each town is lit
 static const float3 SUB_HILL       = float3(0.42, 0.62, 0.55);
 static const float  SUB_DEPTH      = 7.0;    // how far back each house reaches, cells at the smallest size
+static const int    SUB_STEPS      = 6;      // copies stepping back to make the side and roof
 static const float  SUB_SHADOW     = 0.6;    // how dark shadows on the lawn are
 static const float  SUB_HAZE       = 0.45;   // how much the furthest rows fade into the sky
 static const float3 SUB_GRASS_A    = float3(0.36, 0.72, 0.30);
@@ -222,15 +223,15 @@ float3 suburbTown(float2 c, float2 grid, float t, int set)
         // in the shader, which keeps it quick to load)
         float4 h = float4(0, 0, 0, 0);
         bool   shadow = false;
-        [loop] for (int j = 0; j <= 4; j++)
+        [loop] for (int j = 0; j <= SUB_STEPS + 1; j++)
         {
-            if (j == 4 && !(ly < 0.0 && ly > -3.0 * s)) break;
-            float  kk = SUB_DEPTH * s * min(j, 3) / 3.0;
-            float2 at = j < 4 ? float2(lx - kk, ly - 0.6 * kk) : float2(lx - 5.0 * s, s);   // the last look: its shadow on the lawn, cast to the right
+            if (j == SUB_STEPS + 1 && !(ly < 0.0 && ly > -3.0 * s)) break;
+            float  kk = SUB_DEPTH * s * min(j, SUB_STEPS) / SUB_STEPS;
+            float2 at = j <= SUB_STEPS ? float2(lx - kk, ly - 0.6 * kk) : float2(lx - 5.0 * s, s);   // the last look: its shadow on the lawn, cast to the right
             float4 bk = houseAt(at.x, at.y, s, id);
             if (bk.a > 0.0)
             {
-                if (j < 4) h = float4(bk.rgb * (j == 0 ? 1.0 : lerp(0.72, 0.5, j / 3.0)), 1);
+                if (j <= SUB_STEPS) h = float4(bk.rgb * (j == 0 ? 1.0 : lerp(0.72, 0.5, j / (float)SUB_STEPS)), 1);
                 else shadow = true;
                 break;
             }
