@@ -257,7 +257,7 @@ float3 crumbleScene(float2 c, float2 grid, float tc)
 {
     float  F   = CRUMBLE_BIT * gBase;
     float  B   = F * CRUMBLE_BITS;
-    float  tSk = tc + SKULL_SEC;                 // the skulls keep flying while it breaks up
+    float  tSk = tc + SKULL_SEC + RF_SEC;        // the skulls keep flying while it breaks up (their clock began with the swap into them)
     float2 fr  = floor(c / F);
     // first find what this cell shows: a bit still in place, a bit falling past, or the world below.
     // The pictures are drawn once, after the search, which keeps the shader quick to load.
