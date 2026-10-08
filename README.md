@@ -61,28 +61,53 @@ makes every movement repeat on the dot, so the clip joins up without a seam.
 ### [`frequency`](styles/frequency/)
 
 **New, still being tuned.** A background that keeps changing station, as if someone were spinning a
-radio dial, in very fine pixel art. One loop lasts about a minute and a half, then it glitches back to
-its very first frame and starts again:
+radio dial, in very fine pixel art. It plays two stations, nearly three minutes in all, then glitches
+back to its very first frame and starts again.
+
+**The first station:**
 
 1. Fish bones cross the screen in lanes, stepping along at 2 frames a second.
 2. The radio swaps station (static, wavy interference, the picture rolling away) to skulls in
    psychedelic colours flying diagonally at a smooth 30 frames a second.
 3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
-   underneath: a striped sunrise over a rushing grid.
+   underneath: a striped sunrise with pyramids on the horizon, over a glassy grid floor with a finer
+   grid between its lines, light running along them and the sun's reflection shimmering in it.
 4. It glitches and swaps to polka dots humming on unstable electricity: brown-outs, surges that spit
    sparks, pulses of current running through them and a dark hum bar rolling up.
 5. Another swap, to an old wooden TV on a papered wall, showing a black-and-white 1930s cartoon: a dog
    in trousers jogging from left to right with the camera following him, with film grain, scratches
    and flicker.
 6. A heavy glitch tears the picture apart and dives into a tiny distant pattern, a grid inside a grid,
-   which opens into a gridded asteroid field in "the fifth dimension". The camera flies through and
-   pans round, the rocks slowly swelling and shrinking, then it glitches back to the fish bones.
+   which opens into an asteroid field of cubes in "the fifth dimension", every block filled with its own
+   wild colour. The camera flies through and pans round, the rocks slowly swelling and shrinking, and
+   now and then one glitches: its rows slide sideways, its colours flip and it blinks in and out.
+
+**The second station**, where nothing is quite right:
+
+7. An idyllic American suburb seen from a distance: lawns, picket fences, pastel houses, a water
+   tower. Cube-shaped pockets of black hole open over it one by one, the town bending round each,
+   until the last one swallows the view.
+8. A digital bottle tips over and pours out numbers and letters, which grow as they fall and turn
+   into earth, rock, water, grass and lava, piling up until they fill the window.
+9. Those elements form a tunnel that collapses in on itself as time warps, tiles crumbling away
+   onto a second tunnel twisting the other way, while a hypnotic, colour-changing swirl spreads
+   out of its middle and takes over.
+10. Everything glitches to black, and old green computer lines flicker on the screen.
+11. Single eyes open one after another, each looking its own way, until the window is full of them.
+12. The eyes turn into laughing lips with teeth showing, each in a different lipstick, and the
+    picture dives down the throat of the last one, in the middle.
+13. Out over an endless ocean of numbers and letters, many of them made up, under a night city built
+    of letters, with a square moon. Then it glitches back to the fish bones.
+
+All through the second station, small things are off: a moment replays itself now and then, a seam
+runs down the picture, patches show coarse as if they had not finished loading, a building fails to
+appear, and the skyline repeats itself.
 
 On top of all that, short glitches in random psychedelic colours come and go at random moments and
 for random lengths. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
 (the planned changes of station stay). How long each part lasts is set there too.
 
-![The frequency style: eight moments from one loop](preview/frequency.png)
+![The frequency style: twelve moments from one loop](preview/frequency.png)
 
 ### [`halloween`](styles/halloween/)
 
@@ -190,10 +215,12 @@ must stay next to `halloween.hlsl` if you copy them somewhere else.
    repo, **written with forward slashes**. The font, Cascadia Code, comes with Windows Terminal.
 4. Open a new tab with the **Frequency Claude** profile.
 
-The fish bones, skulls and the cartoon dog are drawn in code by `styles/frequency/frequency-sprites.py`
-(needs Pillow), which rewrites `frequency-sheet.png`. Everything else is drawn by the shader itself,
-which is split in four: `frequency-scenes.hlsli`, `frequency-tv.hlsli` and `frequency-space.hlsli`
-must stay next to `frequency.hlsl`.
+The fish bones, skulls, the cartoon dog and the letters are drawn in code by
+`styles/frequency/frequency-sprites.py` (needs Pillow; the letters, real and made-up, come from
+`frequency-glyphs.py` next to it), which rewrites `frequency-sheet.png`. Everything else is drawn by
+the shader itself, which is split in six: `frequency-scenes.hlsli`, `frequency-tv.hlsli`,
+`frequency-space.hlsli`, `frequency-dream.hlsli` and `frequency-eyes.hlsli` must stay next to
+`frequency.hlsl`. A new tab takes a few seconds to start the picture while the terminal builds it.
 
 **A word of warning:** this style flashes and changes colour suddenly by design. If flashing
 images bother you, set `GLITCH_STRENGTH` to `0`, or pick a calmer style.

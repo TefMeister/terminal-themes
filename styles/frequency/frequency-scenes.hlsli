@@ -44,6 +44,10 @@ static const float3 BRIGHT_HILLS   = float3(0.55, 0.12, 0.70);
 static const float3 BRIGHT_FLOOR   = float3(0.45, 0.05, 0.42);
 static const float3 BRIGHT_LINES   = float3(0.40, 1.00, 1.00);
 static const float  BRIGHT_SPEED   = 1.6;    // how fast the floor grid rushes towards you
+static const float  BRIGHT_FOG     = 26.0;   // floor distance at which it melts into the haze
+static const float3 BRIGHT_HAZE    = float3(1.00, 0.55, 0.75);
+static const int    BRIGHT_PYRAMIDS = 3;
+static const float3 BRIGHT_PYRAMID = float3(0.30, 0.06, 0.40);
 
 // --- polka dots on unstable electricity ---
 static const float  POLKA_SPACING  = 22.0;   // cells between dots (x the sprite size)
@@ -70,7 +74,7 @@ float3 fishScene(float2 c, float2 grid, float t)
     if (hash2(floor((c + float2(ts * 2.0, -ts * 3.0)) / 2.0)) > 0.9975) col = FISH_SPECK;
     if (!gSprites) return col;
 
-    for (int L = 0; L < FISH_LAYERS; L++)
+    [loop] for (int L = 0; L < FISH_LAYERS; L++)
     {
         float sc    = gBase * (L == FISH_LAYERS - 1 ? 2.0 : 1.0);
         float near  = lerp(FISH_FAR, 1.0, L / (FISH_LAYERS - 1.0));
@@ -103,7 +107,7 @@ float3 skullScene(float2 c, float2 grid, float t)
     float3 col = band + dither(c) * 0.1 < 0.5 ? SKULL_BG_A : SKULL_BG_B;
     if (!gSprites) return col;
 
-    for (int L = 0; L < SKULL_LAYERS; L++)
+    [loop] for (int L = 0; L < SKULL_LAYERS; L++)
     {
         float  sc     = gBase * (L == SKULL_LAYERS - 1 ? 2.0 : 1.0);
         float  near   = (L + 1.0) / SKULL_LAYERS;
@@ -152,16 +156,53 @@ float3 brightWorld(float2 c, float2 grid, float t)
         float near = hy - grid.y * (0.03 + 0.04 * abs(sin(c.x * 0.021 + 2.0)));
         if (c.y > far)  col = lerp(BRIGHT_HILLS, col, 0.35);
         if (c.y > near) col = BRIGHT_HILLS * 0.8;
+        // pyramids standing on the floor far off, lit on one side, with glowing edges
+        for (int k = 0; k < BRIGHT_PYRAMIDS; k++)
+        {
+            float px = grid.x * (0.12 + 0.76 * hash(k * 3.7 + 0.2));
+            float w  = grid.y * (0.05 + 0.05 * hash(k * 5.1 + 0.4));
+            float dx = c.x - px;
+            float top = hy - w * 0.9 * (1.0 - abs(dx) / w);
+            if (abs(dx) < w && c.y > top)
+            {
+                col = dx < 0.0 ? BRIGHT_PYRAMID : BRIGHT_PYRAMID * 0.55;
+                if (c.y - top < 1.0 || abs(dx) < 0.6) col = BRIGHT_LINES;
+            }
+        }
+        // a bright haze sitting on the horizon
+        col = lerp(col, BRIGHT_HAZE, 0.6 * saturate(1.0 - (hy - c.y) / (grid.y * 0.03)));
         return col;
     }
-    // the floor: a grid rushing towards you
-    float z  = (grid.y - hy) / max(c.y - hy, 0.5);
-    float wx = (c.x - grid.x * 0.5) / grid.y * z * 2.0;
-    float wz = z + t * BRIGHT_SPEED;
-    float lw = 0.03 * z;
-    float3 col = BRIGHT_FLOOR * (1.2 - 0.5 * saturate(z / 12.0));
-    if (abs(frac(wx) - 0.5) > 0.5 - lw || frac(wz) < lw * 1.5) col = lerp(BRIGHT_LINES, col, saturate(z / 30.0));
-    return col;
+    // the floor: a glowing grid rushing towards you, a finer grid between, light running along the
+    // lines, a few lit tiles, the sun's reflection shimmering down the middle and haze far off
+    float dyf = max(c.y - hy, 0.5);
+    float z   = (grid.y - hy) / dyf;
+    float v2  = saturate(dyf / (grid.y - hy));          // 0 at the horizon, 1 at the bottom
+    float px  = z / grid.y * 2.0;                       // floor units per cell, sideways
+    float pz  = z * z / (grid.y - hy);                  // floor units per cell, in depth
+    float wx  = (c.x - grid.x * 0.5) * px;
+    float wz  = z + t * BRIGHT_SPEED;
+    float fog = saturate(z / BRIGHT_FOG);
+    float3 col = BRIGHT_FLOOR * (1.15 - 0.45 * fog);
+    float2 tile = floor(float2(wx, wz));
+    if (wrap(tile.x + tile.y, 2.0) > 0.5) col *= 0.86;
+    if (hash2(tile) > 0.965) col = lerp(col, BRIGHT_LINES * 0.6, 0.5 * (1.0 - fog) * (0.6 + 0.4 * sin(t * 4.0 + tile.x)));
+    if (hash2(c + floor(t * 6.0)) > 0.995) col += 0.12;                                   // glints in the glass
+    // the sun's reflection
+    float halfW = grid.y * 0.26 * (0.95 - 0.55 * v2);
+    if (abs(c.x - grid.x * 0.5) < halfW && sin(wz * 5.0 + sin(c.x * 0.12 + t * 3.0) * 1.5) > 0.1 - 0.5 * (1.0 - v2))
+        col = lerp(col, lerp(BRIGHT_SUN_LOW, BRIGHT_SUN_TOP, 1.0 - v2), 0.55 * (1.0 - 0.6 * v2));
+    // the finer grid
+    float2 fd = abs(frac(float2(wx, wz) * 4.0 + 0.5) - 0.5) * 0.25;
+    if (fd.x < px * 0.5 || fd.y < pz * 0.5) col = lerp(col, BRIGHT_LINES * 0.6, 0.4 * (1.0 - fog));
+    // the main lines, sharp, with a soft glow either side
+    float2 md = abs(frac(float2(wx, wz) + 0.5) - 0.5);
+    float  lx = md.x / px, lz = md.y / pz;
+    float  ln = min(lx, lz);
+    if (ln < 1.0) col = BRIGHT_LINES;
+    else if (ln < 3.0) col = lerp(col, BRIGHT_LINES, 0.3 * (1.0 - fog));
+    if (lx < 1.0 && frac(wz * 0.25 - t * 0.9 + hash(floor(wx + 0.5))) < 0.05) col = float3(1, 1, 1);   // pulses
+    return lerp(col, BRIGHT_HAZE, pow(fog, 1.5) * 0.85);
 }
 
 float3 crumbleScene(float2 c, float2 grid, float tc)
@@ -170,6 +211,10 @@ float3 crumbleScene(float2 c, float2 grid, float tc)
     float  B   = F * CRUMBLE_BITS;
     float  tSk = tc + SKULL_SEC;                 // the skulls keep flying while it breaks up
     float2 fr  = floor(c / F);
+    // first find what this cell shows: a bit still in place, a bit falling past, or the world below.
+    // The pictures are drawn once, after the search, which keeps the shader quick to load.
+    float  dy = 0.0, mul = 1.0, add = 0.0, crack = 0.0;
+    bool   skull = false;
     [loop] for (int k = 0; k < CRUMBLE_REACH; k++)
     {
         float2 bit   = float2(fr.x, fr.y - k);
@@ -180,26 +225,30 @@ float3 crumbleScene(float2 c, float2 grid, float tc)
         if (fall <= 0.0)
         {
             if (k > 0) continue;
-            float3 col  = skullScene(c, grid, tSk);
-            float  warn = tc - (start - CRACK_SEC);
+            skull = true;
+            float warn = tc - (start - CRACK_SEC);
             if (warn > 0.0)
             {
                 float2 inBox = c - box * B;
                 float2 inBit = c - bit * F;
                 bool   edge  = any(inBox < 1.0) || any(inBox >= B - 1.0);
                 float  fl    = hash2(float2(floor(tc * 20.0), box.x + box.y * 57.0));
-                if (edge && fl > 0.3) col = CRACK_COLOUR;
-                else if (any(inBit < 1.0) && hash2(bit + floor(tc * 15.0)) < warn / CRACK_SEC) col = lerp(col, CRACK_COLOUR, 0.6);
+                if (edge && fl > 0.3) crack = 1.0;
+                else if (any(inBit < 1.0) && hash2(bit + floor(tc * 15.0)) < warn / CRACK_SEC) crack = 0.6;
             }
-            return col;
+            break;
         }
-        float  dy   = floor(0.5 * CRUMBLE_GRAVITY * gBase * fall * fall);
+        float  d    = floor(0.5 * CRUMBLE_GRAVITY * gBase * fall * fall);
         float  side = F * saturate(1.0 - fall / CRUMBLE_LIFE);
-        float2 rel  = c + 0.5 - ((bit + 0.5) * F + float2(0.0, dy));
+        float2 rel  = c + 0.5 - ((bit + 0.5) * F + float2(0.0, d));
         if (all(abs(rel) < side * 0.5))
-            return skullScene(c - float2(0.0, dy), grid, tSk) * lerp(1.1, 0.4, saturate(fall / CRUMBLE_LIFE)) + CRACK_COLOUR * 0.08;
+        {
+            skull = true; dy = d; mul = lerp(1.1, 0.4, saturate(fall / CRUMBLE_LIFE)); add = 0.08;
+            break;
+        }
     }
-    return brightWorld(c, grid, tc);
+    if (!skull) return brightWorld(c, grid, tc);
+    return lerp(skullScene(c - float2(0.0, dy), grid, tSk) * mul + CRACK_COLOUR * add, CRACK_COLOUR, crack);
 }
 
 // how much current is flowing at a moment: a hum, sudden brown-outs and surges
@@ -224,7 +273,7 @@ float3 polkaScene(float2 c, float2 grid, float t)
     float best = 1e9, bv = 0.0, bid = 0.0;
     float2 bc = 0;
     float row = floor(c.y / rh);
-    for (int i = -1; i <= 1; i++)                   // the nearest dot in this row and the two beside it
+    [loop] for (int i = -1; i <= 1; i++)                   // the nearest dot in this row and the two beside it
     {
         float r   = row + i;
         float off = wrap(r, 2.0) * S * 0.5;

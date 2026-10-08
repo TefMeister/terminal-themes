@@ -6,16 +6,19 @@ Layout (must match the SHEET constants at the top of frequency.hlsl):
     y   0..23   fish bones, 48 x 24 each: 3 kinds x 2 swim frames, kind-major (6 columns)
     y  24..47   skulls, 24 x 24 each: 4 kinds
     y  48..111  the cartoon dog jogging, 64 x 64 each: 8 frames
+    y 112..119  letters, 6 x 8 each: 32 real (digits, capitals), then 32 made-up (frequency-glyphs.py)
 Everything faces right. Transparent pixels have alpha 0; the shader tints and scales the rest.
 """
 import math, os
 from PIL import Image, ImageDraw
+from importlib.machinery import SourceFileLoader
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHEET_W, SHEET_H = 512, 128
 FISH_W, FISH_H, FISH_KINDS, FISH_FRAMES = 48, 24, 3, 2
 SKULL_Y, SKULL_S, SKULL_KINDS = 24, 24, 4
 DOG_Y, DOG_S, DOG_FRAMES = 48, 64, 8
+GLYPH_Y = 112
 
 # --- palettes ---
 BONE, BONE_SHADE, BONE_DARK = (236, 230, 206, 255), (168, 158, 132, 255), (92, 84, 70, 255)
@@ -214,6 +217,8 @@ def main():
         draw_skull(img, kind * SKULL_S, SKULL_Y, kind)
     for frame in range(DOG_FRAMES):
         draw_dog(img, frame * DOG_S, DOG_Y, frame)
+    glyphs = SourceFileLoader("glyphs", os.path.join(HERE, "frequency-glyphs.py")).load_module()
+    glyphs.draw_glyphs(img, GLYPH_Y)
     out = os.path.join(HERE, "frequency-sheet.png")
     img.save(out)
     print("wrote", out)

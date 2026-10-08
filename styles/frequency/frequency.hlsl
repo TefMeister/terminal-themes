@@ -1,14 +1,20 @@
 // Frequency: a pixel-art background that keeps changing station, drawn behind the text.
-// One loop of about a minute and a half, then back to the very first frame:
+// One loop of nearly three minutes on two stations, then back to the very first frame:
 //   fish bones crossing at 2 frames a second -> (radio swap) -> skulls flying diagonally at 30 ->
 //   the picture cracks into boxes that crumble away, showing a brighter world underneath ->
 //   (glitch, radio swap) -> polka dots humming on unstable electricity -> (radio swap) ->
 //   an old wooden TV showing a 1930s cartoon dog in trousers jogging, the camera following ->
 //   a heavy glitch tears it apart, it zooms into a distant pattern, flies into a gridded
-//   asteroid field and pans around -> (glitch, radio swap) -> the fish bones again.
+//   asteroid field of wildly coloured, glitching cubes and pans around -> (radio swap) ->
+//   the second station, where nothing is quite right: black-hole cubes open over a suburb ->
+//   a digital bottle pours letters that grow into earth, water and fire -> a tunnel of them
+//   collapses as time warps, a hypnotic swirl spreading out of it -> glitch to black, old green
+//   computer lines -> eyes opening one by one until the window is full -> laughing lips ->
+//   down the last one's throat -> an ocean of made-up letters under a night city of letters ->
+//   (glitch, radio swap) -> the fish bones again.
 // On top of that, random glitches in psychedelic colours come and go at random times.
-// The scenes are in frequency-scenes.hlsli, frequency-tv.hlsli and frequency-space.hlsli, which
-// must stay next to this file. Sprites come from frequency-sheet.png (drawn by frequency-sprites.py;
+// The scenes are in frequency-scenes.hlsli, frequency-tv.hlsli, frequency-space.hlsli,
+// frequency-dream.hlsli and frequency-eyes.hlsli, which must stay next to this file. Sprites come from frequency-sheet.png (drawn by frequency-sprites.py;
 // the sheet constants below must match). The colour scheme's background must be pure black.
 Texture2D shaderTexture;
 Texture2D image;
@@ -32,6 +38,15 @@ static const float  TV_SEC         = 16.0;
 static const float  TEAR_SEC       = 2.5;
 static const float  ZOOM_SEC       = 2.5;
 static const float  SPACE_SEC      = 15.0;
+static const float  SUBURB_SEC     = 13.0;   // the second station starts here
+static const float  BOTTLE_SEC     = 8.0;
+static const float  TUNNEL_SEC     = 9.0;    // the tunnel collapsing...
+static const float  SWIRL_SEC      = 6.0;    // ...and the swirl once it has taken over
+static const float  PC_SEC         = 4.0;
+static const float  EYES_SEC       = 9.0;
+static const float  LIPS_SEC       = 7.0;
+static const float  THROAT_SEC     = 4.0;
+static const float  CITY_SEC       = 15.0;
 static const float  START_AT       = 0.0;    // for trying things out: start this many seconds into the loop
 
 // --- random glitches between the planned ones ---
@@ -52,7 +67,16 @@ static const float  RF_WOBBLE      = 6.0;    // cells the picture wobbles sidewa
 static const int    FISH_W = 48, FISH_H = 24, FISH_KINDS = 3, FISH_Y = 0;
 static const int    SKULL_S = 24, SKULL_KINDS = 4, SKULL_Y = 24;
 static const int    DOG_S = 64, DOG_FRAMES = 8, DOG_Y = 48;
+static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;   // 32 real letters, 32 made-up
 static const int    SHEET_W = 512, SHEET_H = 128;
+
+// --- the second station's feeling that something is not quite right ---
+static const float  UNCANNY_WINDOW  = 5.0;   // each window of this many seconds...
+static const float  UNCANNY_DEJAVU  = 0.4;   // ...has this chance of a moment replaying itself
+static const float  UNCANNY_REPLAY  = 0.6;   // seconds replayed
+static const float  UNCANNY_SEAM    = 0.35;  // chance, every 3 seconds, of a seam running down the picture
+static const float  UNCANNY_LOADING = 0.02;  // share of patches that render coarse, as if still loading
+static const float  UNCANNY_PATCH   = 32.0;  // patch size, cells
 
 // --- user messages (same marker the other styles use) ---
 static const float3 MARKER         = float3(0.0, 0.0, 3.0 / 255.0);
@@ -75,10 +99,20 @@ static const float  E_TV     = E_RF3 + TV_SEC;
 static const float  E_TEAR   = E_TV + TEAR_SEC;
 static const float  E_ZOOM   = E_TEAR + ZOOM_SEC;
 static const float  E_SPACE  = E_ZOOM + SPACE_SEC;
-static const float  LOOP_SEC = E_SPACE + RF_SEC;
+static const float  E_RF4    = E_SPACE + RF_SEC;
+static const float  E_SUB    = E_RF4 + SUBURB_SEC;
+static const float  E_BOTTLE = E_SUB + BOTTLE_SEC;
+static const float  E_WARP   = E_BOTTLE + TUNNEL_SEC + SWIRL_SEC;
+static const float  E_PC     = E_WARP + PC_SEC;
+static const float  E_EYES   = E_PC + EYES_SEC;
+static const float  E_LIPS   = E_EYES + LIPS_SEC;
+static const float  E_THROAT = E_LIPS + THROAT_SEC;
+static const float  E_CITY   = E_THROAT + CITY_SEC;
+static const float  LOOP_SEC = E_CITY + RF_SEC;
 
 // scene numbers
-static const int    S_FISH = 0, S_SKULL = 1, S_CRUMBLE = 2, S_BRIGHT = 3, S_POLKA = 4, S_TV = 5, S_ZOOM = 6, S_SPACE = 7, S_BLANK = 8;
+static const int    S_FISH = 0, S_SKULL = 1, S_CRUMBLE = 2, S_BRIGHT = 3, S_POLKA = 4, S_TV = 5, S_ZOOM = 6, S_SPACE = 7, S_BLANK = 8,
+                    S_SUBURB = 9, S_BOTTLE = 10, S_WARP = 11, S_PC = 12, S_EYES = 13, S_LIPS = 14, S_THROAT = 15, S_CITY = 16;
 
 // set once per pixel in main()
 static bool  gSprites;
@@ -117,6 +151,8 @@ float4 sprite(int2 origin, int2 size, float2 local, float sc, bool flip)
 #include "frequency-scenes.hlsli"
 #include "frequency-tv.hlsli"
 #include "frequency-space.hlsli"
+#include "frequency-dream.hlsli"
+#include "frequency-eyes.hlsli"
 
 float3 sceneColour(int id, float2 c, float2 grid, float t)
 {
@@ -128,6 +164,14 @@ float3 sceneColour(int id, float2 c, float2 grid, float t)
     [branch] if (id == S_TV)      return tvScene(c, grid, t);
     [branch] if (id == S_ZOOM)    return zoomScene(c, grid, t);
     [branch] if (id == S_SPACE)   return spaceScene(c, grid, t);
+    [branch] if (id == S_SUBURB)  return suburbScene(c, grid, t);
+    [branch] if (id == S_BOTTLE)  return bottleScene(c, grid, t);
+    [branch] if (id == S_WARP)    return warpScene(c, grid, t);
+    [branch] if (id == S_PC)      return pcScene(c, grid, t);
+    [branch] if (id == S_EYES)    return eyesScene(c, grid, t);
+    [branch] if (id == S_LIPS)    return lipsScene(c, grid, t);
+    [branch] if (id == S_THROAT)  return throatScene(c, grid, t);
+    [branch] if (id == S_CITY)    return cityScene(c, grid, t);
     return float3(0, 0, 0);
 }
 
@@ -186,10 +230,10 @@ float3 readText(float2 uv)
     float3 c = shaderTexture.Sample(samplerState, uv).rgb;
     if (isMarker(c)) c = float3(0, 0, 0);
     bool userRow = false;
-    for (int i = 0; i < ROW_SAMPLES; i++)
+    [loop] for (int i = 0; i < ROW_SAMPLES; i++)
     {
         float x = (i + 0.5) / ROW_SAMPLES;
-        if (isMarker(shaderTexture.Sample(samplerState, float2(x, uv.y)).rgb)) { userRow = true; break; }
+        if (isMarker(shaderTexture.SampleLevel(samplerState, float2(x, uv.y), 0).rgb)) { userRow = true; break; }
     }
     if (userRow) c = USER_COLOUR * ink(c);
     return c;
@@ -212,7 +256,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     // which part of the loop we are in
     int   id = S_FISH, idB = S_FISH;
-    float t = tl, tB = 0.0, rf = -1.0, rfHeavy = 0.0, tear = -1.0, zoomMix = -1.0, forced = 0.0;
+    float t = tl, tB = 0.0, rf = -1.0, rfHeavy = 0.0, tear = -1.0, zoomMix = -1.0, forced = 0.0, blackout = 0.0;
     if      (tl < E_FISH)   { id = S_FISH; t = tl; }
     else if (tl < E_RF1)    { id = S_FISH; t = tl; idB = S_SKULL; tB = tl - E_FISH; rf = (tl - E_FISH) / RF_SEC; rfHeavy = 0.3; }
     else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; }
@@ -225,7 +269,16 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_TEAR)   { id = S_TV; t = tl - E_POLKA; tear = (tl - E_TV) / TEAR_SEC; }
     else if (tl < E_ZOOM)   { id = S_ZOOM; t = tl - E_TEAR; zoomMix = (tl - E_TEAR) / ZOOM_SEC; }
     else if (tl < E_SPACE)  { id = S_SPACE; t = tl - E_ZOOM; forced = 0.6 * saturate((tl - (E_SPACE - 1.0)) / 1.0); }
-    else                    { id = S_SPACE; t = tl - E_ZOOM; idB = S_FISH; tB = 0.0; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.9; }
+    else if (tl < E_RF4)    { id = S_SPACE; t = tl - E_ZOOM; idB = S_SUBURB; tB = tl - E_SPACE; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.5; }
+    else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; forced = 0.6 * saturate((tl - (E_SUB - 0.7)) / 0.7); }
+    else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; forced = 0.6 * saturate(1.0 - (tl - E_SUB) / 0.5); }
+    else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = saturate((tl - (E_WARP - 1.2)) / 1.2); blackout = saturate((tl - (E_WARP - 0.8)) / 0.8); }
+    else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.8 * saturate(1.0 - (tl - E_WARP) / 0.6); }
+    else if (tl < E_EYES)   { id = S_EYES; t = tl - E_PC; }
+    else if (tl < E_LIPS)   { id = S_LIPS; t = tl - E_EYES; }
+    else if (tl < E_THROAT) { id = S_THROAT; t = tl - E_LIPS; }
+    else if (tl < E_CITY)   { id = S_CITY; t = tl - E_THROAT; }
+    else                    { id = S_CITY; t = tl - E_THROAT; idB = S_FISH; tB = 0.0; rf = (tl - E_CITY) / RF_SEC; rfHeavy = 0.9; }
 
     // glitch strength now: the random kind outside the planned changes, the planned kind inside them
     float seed;
@@ -239,6 +292,18 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         g *= 0.4 + 0.6 * hash(seed * 0.71);
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
+
+    // the second station never feels quite right: a moment replays itself now and then, a seam
+    // runs down the picture, and patches render coarse as if they had not finished loading
+    if (id >= S_SUBURB && rf < 0.0)
+    {
+        float w  = floor(T / UNCANNY_WINDOW);
+        float s0 = w * UNCANNY_WINDOW + hash(w * 4.1 + 0.2) * (UNCANNY_WINDOW - UNCANNY_REPLAY);
+        if (hash(w * 1.9 + 0.7) < UNCANNY_DEJAVU && T > s0 && T < s0 + UNCANNY_REPLAY) t -= UNCANNY_REPLAY;
+        float sw = floor(T / 3.0);
+        if (hash(sw * 2.7 + 0.1) < UNCANNY_SEAM && c.x > floor(hash(sw * 5.3) * grid.x)) cc.y += 1.0;
+        if (hash2(floor(c / UNCANNY_PATCH) + floor(T * 2.0) * 0.37) < UNCANNY_LOADING) cc = floor(cc / 8.0) * 8.0 + 4.0;
+    }
 
     // the heavy tear: bands of the TV picture fly apart, and the gaps open onto a far-off pattern
     if (tear >= 0.0)
@@ -266,11 +331,13 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         else                    { cc.y = y; }
     }
 
+    // the zoom gives way to the cubes cell by cell, in a dither, so only one picture is drawn
+    if (zoomMix > 0.65 && hash2(c + floor(T * 20.0)) < smoothstep(0.65, 1.0, zoomMix)) { id = S_SPACE; t = tl - E_ZOOM; cc = c; }
     float3 col = bar ? float3(0, 0, 0) : sceneColour(id, cc, grid, t);
-    [branch] if (zoomMix > 0.65)
-        col = lerp(col, spaceScene(c, grid, tl - E_ZOOM), smoothstep(0.65, 1.0, zoomMix));
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
+    // everything glitches to black: bands of rows go out, more and more of them
+    if (blackout > 0.0 && hash2(float2(floor(c.y / 4.0), floor(T * 15.0))) < blackout * 1.2) col = float3(0, 0, 0);
 
     // the radio part of the swap: static snow and interference bars sweeping through the frequencies
     if (rf >= 0.0)
