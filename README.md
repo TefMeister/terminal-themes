@@ -3,16 +3,25 @@
 A collection of looks for **Windows Terminal**, mostly made for running Claude Code in. Each style is a
 small shader (a file that repaints the terminal window) plus a colour scheme.
 
-![The green monitor starburst style](preview/green-monitor-starburst.png)
+![The green monitor Lanes style](preview/green-monitor-lanes.png)
 
 ## The styles
 
 Each style below has a short recording of it running, with a few lines of sample text. Every clip is
 an exact loop: its last frame runs straight into its first.
 
+### [`green-monitor-lanes`](styles/green-monitor-lanes/)
+
+**The default since 2026-10-08, and the look the Lanes plugin ships with.** The same old green
+monitor as the starburst below, but behind the text sits the Lanes Plugin banner, faint and striped,
+in its own green and yellow, with the light slowly running down the screen over it. The whole banner
+fits across the window and stays centred as the window changes size.
+
+![The green monitor Lanes style](preview/green-monitor-lanes.png)
+
 ### [`green-monitor-starburst`](styles/green-monitor-starburst/)
 
-**The default.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a
+**The default until 2026-10-08.** An old green monitor: sharp letters with a soft glow, green glass, dark corners, and a
 faint striped starburst behind the text, drawn as a flower with the rays as petals, with a light that
 slowly runs down the screen over it.
 
@@ -99,14 +108,15 @@ out on one picture and the shader flips through them.
 To go back to a still picture, set the first three numbers back to `1`. The flower that comes with
 the theme is a still picture.
 
-## Install (green-monitor-starburst)
+## Install (green-monitor-lanes or green-monitor-starburst)
 
 1. Download or clone this repo somewhere that will stay put.
 2. Install the font: open [`fonts/ShareTechMono-Regular.ttf`](fonts/ShareTechMono-Regular.ttf) and
    click **Install**. It is free and included here under its open licence (see below). You can also get
    it from [Google Fonts](https://fonts.google.com/specimen/Share+Tech+Mono).
 3. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
-4. From [`profile-snippet.json`](styles/green-monitor-starburst/profile-snippet.json), paste the
+4. From the style's `profile-snippet.json` ([lanes](styles/green-monitor-lanes/profile-snippet.json),
+   [starburst](styles/green-monitor-starburst/profile-snippet.json)), paste the
    `profile` into `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where
    you put this repo, **written with forward slashes** (`C:/Users/you/terminal-themes`).
 5. Open a new tab with the **Green Monitor Claude** profile.
@@ -158,13 +168,14 @@ Save the file and Windows Terminal reloads it straight away.
 
 - `python tools/make-starburst.py` redraws `starburst.png` (needs Pillow).
 - `python tools/gif-to-sheet.py` turns a GIF into a frame sheet (see "Or a moving one" above).
-- `python tools/make-preview.py` redraws the preview at the top of this page (needs Pillow and NumPy).
+- `python tools/make-preview.py` and `python tools/make-preview-lanes.py` redraw the starburst and Lanes
+  previews (need Pillow and NumPy).
 - The looping clips are recorded with the scripts in [`tools/preview-clips/`](tools/preview-clips/); its
   README has the steps.
 
 ## Disclaimer
 
-This is a fan-made set of terminal themes. The starburst and the icons are our own drawings, made in
+This is a fan-made set of terminal themes. The starburst, the Lanes banner and the icons are our own artwork, made in
 the spirit of the Claude logo; this project is **not** made by, endorsed by or connected to Anthropic.
 Shaders use Windows Terminal's experimental pixel-shader feature, which may change or break in future
 updates. If anything here should be credited or removed, the rights holder can open an issue and it
