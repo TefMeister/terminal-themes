@@ -1,5 +1,6 @@
-// Frequency, part 5: the second station, first half. Three idyllic American suburbs seen from a
-// distance, each torn apart by an emerging black hole and glitching into the next; a
+// Frequency, part 5: the second station, first half. An idyllic American suburb seen from a
+// distance, a black hole growing in the middle of it and swallowing it, debris flying in, the town
+// glitching twice into bleaker, more broken versions of itself, until the camera dives in; a
 // digital bottle tipping over and pouring out numbers and letters that grow into earth, rock,
 // water and fire; then a tunnel built of those elements, collapsing in on itself as time warps,
 // with a hypnotic colour-changing swirl spreading out of its middle.
@@ -24,8 +25,15 @@ static const float3 SUB_WALLS[8]   = { float3(0.95, 0.88, 0.70), float3(0.70, 0.
 static const float3 SUB_ROOFS[5]   = { float3(0.55, 0.18, 0.15), float3(0.30, 0.30, 0.35), float3(0.25, 0.30, 0.50),
                                        float3(0.40, 0.28, 0.18), float3(0.22, 0.42, 0.30) };
 static const float3 SUB_DOORS[4]   = { float3(0.70, 0.12, 0.12), float3(0.15, 0.25, 0.55), float3(0.45, 0.25, 0.15), float3(0.10, 0.10, 0.10) };
-static const float  SUB_BH_SIZE    = 0.07;   // a black hole's size once it has emerged, share of the height
-static const float  SUB_SWALLOW    = 1.6;    // in its last seconds it grows to swallow the whole town
+static const float2 SUB_HOLE_AT    = float2(0.5, 0.42);   // the black hole sits in the middle, on the horizon
+static const float  SUB_BH_START   = 0.015;  // its size as it emerges, share of the window height...
+static const float  SUB_BH_END     = 0.30;   // ...and by the time the camera dives in
+static const float  SUB_DIVE       = 2.0;    // seconds the camera takes to dive into it
+static const float  SUB_DIVE_ZOOM  = 3.2;    // how far the dive zooms in
+static const int    SUB_DEBRIS     = 48;     // bits of the town flying into it
+static const float  SUB_WARP       = 7.0;    // how far the picture warps by the end, cells
+static const float  SUB_VIVID      = 1.6;    // how over-vibrant the colours are at first
+static const float3 SUB_BLEAK      = float3(0.95, 0.80, 0.50);   // the bleak brown-yellow they drain to
 static const float  SUB_LENS       = 1.2;    // how strongly the town bends round the hole
 static const float  SUB_SPIN       = 2.5;    // how hard the town swirls into it
 static const float  SUB_DISK_FLAT  = 3.5;    // how flat the glowing disk round it looks
@@ -201,19 +209,25 @@ float3 suburbTown(float2 c, float2 grid, float t, int set)
 float3 suburbScene(float2 c, float2 grid, float t)
 {
     int    set  = min(2, (int)floor(t / SUB_PHASE_SEC));
-    float  pt   = t - set * SUB_PHASE_SEC;
-    float  pk   = saturate(pt / SUB_PHASE_SEC);
-    float2 m    = float2(grid.x * (0.25 + 0.5 * hash(set * 3.1 + 0.2)), grid.y * (0.22 + 0.3 * hash(set * 5.3 + 0.7)));
-    float  R    = SUB_BH_SIZE * grid.y * smoothstep(0.0, 0.35, pk) * (0.7 + 0.5 * pk) * exp(max(0.0, pt - (SUB_PHASE_SEC - SUB_SWALLOW)) * 2.8);
+    float2 m    = grid * SUB_HOLE_AT;
+    float  life = SUBURB_SEC - SUB_DIVE;
+    float  b    = saturate(t / life);                                  // how far gone: 0 bright and whole, 1 bleak and broken
+    // the camera dives into the hole at the end
+    float  dk   = saturate((t - life) / SUB_DIVE);
+    float  zoom = exp(dk * dk * SUB_DIVE_ZOOM);
+    float2 pz   = m + (c - m) / zoom;
+    float  R    = grid.y * lerp(SUB_BH_START, SUB_BH_END, pow(b, 1.5)) * smoothstep(0.5, 2.0, t);
 
-    // the picture breaks into blocks knocked out of place, a little in the first town, a lot by the third
-    float  frag = (set + pk) / 3.0;
+    // the picture warps, then breaks into blocks knocked out of place, more after every glitch
+    float2 p = pz;
+    p.x += sin(p.y * 0.08 + t * 2.0) * b * SUB_WARP * gBase;
+    p.y += sin(p.x * 0.05 + t * 1.3) * b * SUB_WARP * 0.5 * gBase;
+    float  frag = (set + 0.4 * saturate((t - set * SUB_PHASE_SEC) / SUB_PHASE_SEC)) / 2.4;   // whole until the first glitch
     float  B    = SUB_FRAG_BLOCK * gBase;
-    float2 blk  = floor(c / B);
+    float2 blk  = floor(pz / B);
     float  hb   = hash2(blk + set * 17.3 + floor(t * 3.0) * 0.07);
-    float2 p    = c;
-    if (hb < frag * SUB_FRAG) p += floor((float2(hash2(blk + 1.3 + set), hash2(blk + 2.9 + set)) - 0.5) * B * 3.0);
-    bool missing = hb < frag * SUB_FRAG * 0.25;
+    if (set > 0 && hb < frag * SUB_FRAG) p += floor((float2(hash2(blk + 1.3 + set), hash2(blk + 2.9 + set)) - 0.5) * B * 3.0);
+    bool missing = set > 0 && hb < frag * SUB_FRAG * 0.3;
 
     // the hole bends the town round it and drags it in, swirling
     float2 d = p - m;
@@ -224,22 +238,50 @@ float3 suburbScene(float2 c, float2 grid, float t)
         float ang = SUB_SPIN * R * R / (r * r + R * R) + t * 0.4 * R / (r + R);
         p = m + rot2(d / r, ang) * pr;
     }
-    float3 col = missing ? float3(1, 1, 1) * hash2(c + floor(t * 20.0)) * 0.25 : suburbTown(p, grid, t, set);
+    float3 col = missing ? float3(1, 1, 1) * hash2(c + floor(t * 20.0)) * 0.2 : suburbTown(p, grid, t, set);
+
+    // colours drain as it goes: far too vibrant at first, then bleak browns and yellows
+    float  l     = luma(col);
+    float3 vivid = saturate(l + (col - l) * SUB_VIVID) * 1.08;
+    float3 bleak = l * SUB_BLEAK * (1.0 - 0.3 * b);
+    col = lerp(vivid, bleak, smoothstep(0.0, 1.0, b));
     if (R <= 0.0) return col;
 
-    // the glowing disk, the black hole and its bright rim
-    float2 q  = rot2(c - m, 0.35 + set * 0.5);
+    // debris: bits of house, roof, lawn and window spiralling in
+    [loop] for (int i = 0; i < SUB_DEBRIS; i++)
+    {
+        float id = i * 7.13 + 0.5;
+        if (hash(id + 2.2) > 0.25 + 0.75 * b) continue;                  // more of it as the hole grows
+        float per = 1.4 + 2.0 * hash(id);
+        float ph  = frac(t / per + hash(id + 0.3));
+        float r0  = grid.y * (0.3 + 0.5 * hash(id + 0.7));
+        float rr  = R + (r0 - R) * (1.0 - ph) * (1.0 - ph);
+        float a   = hash(id + 0.9) * TAU + ph * ph * 5.0;
+        float2 pos = m + float2(cos(a), sin(a) * 0.55) * rr;
+        float  sz  = (3.0 + 9.0 * hash(id + 1.1)) * gBase * (1.0 - 0.7 * ph);
+        float2 dq  = rot2(pz - pos, ph * 6.0 + id);
+        if (abs(dq.x) < sz * 0.5 && abs(dq.y) < sz * 0.5)
+        {
+            float pick = hash(id + 1.7);
+            float3 bit = pick < 0.4 ? SUB_WALLS[min(7, (int)(hash(id + 3.3) * 8.0))] : (pick < 0.65 ? SUB_ROOFS[min(4, (int)(hash(id + 3.9) * 5.0))]
+                       : (pick < 0.85 ? SUB_GRASS_A : float3(1.0, 0.88, 0.45)));
+            col = lerp(bit * 1.1, luma(bit) * SUB_BLEAK, b) * (dq.y < 0.0 ? 1.0 : 0.75);
+        }
+    }
+
+    // the glowing disk, the black hole and its bright rim, all seen through the dive
+    float2 q  = rot2(pz - m, 0.35);
     q.y *= SUB_DISK_FLAT;
     float  rd = length(q) / R;
     float  sw = sin(atan2(q.y, q.x) * 6.0 - t * 6.0 + rd * 3.0);
     float3 disk = lerp(SUB_DISK_COOL, SUB_DISK_HOT, saturate(2.2 - rd)) * (0.75 + 0.25 * sw);
     bool   band = rd > 1.3 && rd < 2.8 && hash2(c + floor(t * 10.0)) < 1.2 - (rd - 1.3) * 0.6;
     if (band && q.y < 0.0) col = lerp(col, disk, 0.85);
-    float rc = length(c - m);
+    float rc = length(pz - m);
     if (rc < R) col = float3(0, 0, 0);
-    else if (rc < R * 1.08 + 1.0) col = lerp(SUB_DISK_HOT, col, 0.3);
+    else if (rc < R * 1.08 + 1.0 / zoom) col = lerp(SUB_DISK_HOT, col, 0.3);
     if (band && q.y >= 0.0) col = lerp(col, disk, 0.9);
-    return col;
+    return col * (1.0 - smoothstep(0.85, 1.0, dk));                     // and everything goes black
 }
 
 // where the bottle is at a moment: it starts huge and shrinks, leaning further to the right

@@ -89,11 +89,14 @@ back to its very first frame and starts again.
 
 **The second station**, where nothing is quite right:
 
-7. Three idyllic American suburbs in turn, seen from a distance: lawns, picket fences, bushes and
-   mailboxes, and six kinds of house (plain, two-storey, low ranch, hipped roof, with a garage, steep
-   A-frame), first by day, then at golden hour, then under a grey sky. In each a black hole emerges,
-   with a glowing disk round it, bending and swirling the town into itself until it swallows the
-   view, and the picture glitches into the next town. Each time the picture breaks into more pieces.
+7. An idyllic American suburb seen from a distance: lawns, picket fences, bushes and mailboxes,
+   and six kinds of house (plain, two-storey, low ranch, hipped roof, with a garage, steep A-frame).
+   A black hole emerges in the middle, on the horizon, and slowly grows, with a glowing disk round
+   it, bending and swirling the town into itself while bits of house, roof and lawn fly in. The
+   colours drain as it goes, from far too vibrant to bleak browns and yellows. Twice the picture
+   glitches into another version of the town (golden hour, then grey), each bleaker, more warped and
+   more broken than the last. Then the camera dives into the hole, and a pixelated big bang blasts
+   out from the middle onto the next scene.
 8. A huge digital bottle on the left tips to the right, shrinking as it goes, and pours out numbers
    and letters in an arc across the screen. They grow as they fly and turn into earth, rock, water,
    grass and lava, piling up until they fill the window, then dissolving block by block into the
@@ -117,7 +120,7 @@ runs down the picture, patches show coarse as if they had not finished loading, 
 appear, and the skyline repeats itself.
 
 On top of all that, short glitches in random psychedelic colours come and go at random moments and
-for random lengths, and thin glitch lines flick across the picture all the way through. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
+for random lengths, and now and then a short, thin glitch streak flicks across part of a row. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
 (the planned changes of station stay). How long each part lasts is set there too.
 
 ![The frequency style: twelve moments from one loop](preview/frequency.png)

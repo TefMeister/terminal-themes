@@ -72,6 +72,8 @@ static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;  
 static const int    SHEET_W = 512, SHEET_H = 128;
 
 // --- joins inside the second station ---
+static const float  BANG_SEC        = 1.8;   // the pixelated big bang that opens the bottle scene
+static const float  BANG_BLOCK      = 6.0;   // its pixel size, cells
 static const float  BOTTLE_BLEND    = 2.5;   // seconds the bottle's heap takes to dissolve into the tunnel
 static const float  BLEND_BLOCK     = 6.0;   // size of the blocks it dissolves in, cells
 static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
@@ -79,8 +81,10 @@ static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-m
 
 // --- thin glitch lines, all the way through ---
 static const float  LINE_RATE       = 20.0;  // the lines change this many times a second
-static const float  LINE_SHARE      = 0.004; // share of rows hit at any moment (about two or three lines)
-static const float  LINE_BURST      = 0.02;  // ...rising to this in short bursts
+static const float  LINE_SHARE      = 0.0008; // share of rows hit at any moment (one now and then)
+static const float  LINE_BURST      = 0.004; // ...rising to this in rare short bursts
+static const float  LINE_MIN        = 8.0;   // a line is a short streak this many cells long...
+static const float  LINE_MAX        = 60.0;  // ...up to this, never right across the window
 static const float  LINE_SHIFT      = 14.0;  // how far a hit row slides sideways, cells
 
 // --- the second station's feeling that something is not quite right ---
@@ -290,8 +294,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_SPACE)  { id = S_SPACE; t = tl - E_ZOOM; forced = 0.6 * saturate((tl - (E_SPACE - 1.0)) / 1.0); }
     else if (tl < E_RF4)    { id = S_SPACE; t = tl - E_ZOOM; idB = S_SUBURB; tB = tl - E_SPACE; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.5; }
     else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; float pb = wrap(t, SUB_PHASE_SEC);
-                              forced = t > 1.0 && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
-    else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; forced = 0.6 * saturate(1.0 - (tl - E_SUB) / 0.5); }
+                              forced = t > 1.0 && t < SUBURB_SEC - SUB_DIVE && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
+    else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; }
     else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = saturate((tl - (E_WARP - 1.2)) / 1.2); blackout = saturate((tl - (E_WARP - 0.8)) / 0.8); }
     else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.8 * saturate(1.0 - (tl - E_WARP) / 0.6); }
     else if (tl < E_EYES)   { id = S_EYES; t = tl - E_PC; }
@@ -313,12 +317,27 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
 
-    // thin glitch lines: a row or two slides sideways for a moment, now and then a little burst of them
+    // thin glitch lines: now and then a short streak of a row slides sideways for a moment
     float lslot = floor(T * LINE_RATE);
     float lrow  = floor(c.y / 2.0);
-    float lrate = hash(floor(T * 1.5) * 0.77) < 0.15 ? LINE_BURST : LINE_SHARE;
-    bool  gline = hash2(float2(lrow, lslot)) < lrate;
+    float lrate = hash(floor(T * 1.5) * 0.77) < 0.06 ? LINE_BURST : LINE_SHARE;
+    float lx0   = hash2(float2(lrow, lslot + 3.0)) * grid.x;
+    float llen  = lerp(LINE_MIN, LINE_MAX, hash2(float2(lrow, lslot + 4.0))) * gBase;
+    bool  gline = hash2(float2(lrow, lslot)) < lrate && c.x >= lx0 && c.x < lx0 + llen;
     if (gline) cc.x += floor((hash2(float2(lrow, lslot + 1.0)) - 0.5) * LINE_SHIFT * 2.0);
+
+    // after the dive into the black hole: a pixelated big bang, its blast front opening onto the bottle
+    float bang = -1.0, bangD = 0.0, bangR = 0.0;
+    float2 bangB = 0;
+    if (id == S_BOTTLE && t < BANG_SEC)
+    {
+        float  B = BANG_BLOCK * gBase;
+        bangB = floor(c / B);
+        bangD = length((bangB + 0.5) * B - grid * SUB_HOLE_AT) / grid.y;
+        bangR = pow(t / BANG_SEC, 0.6) * 1.4;
+        bang  = t / BANG_SEC;
+        if (bangD > bangR) id = S_BLANK;
+    }
 
     // the bottle's heap dissolves into the tunnel block by block
     if (id == S_WARP && t < BOTTLE_BLEND && hash2(floor(c / (BLEND_BLOCK * gBase)) + 0.5) > smoothstep(0.0, 1.0, t / BOTTLE_BLEND))
@@ -371,6 +390,14 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
     if (gline) col = lerp(col * 1.3, hue(hash2(float2(lrow, lslot + 2.0))), 0.25);
+    if (bang >= 0.0)
+    {
+        col = lerp(col, float3(1, 1, 1), saturate(1.0 - bang * 6.0) * 0.7);                      // the flash
+        if (bangD > bangR - 0.12 && bangD <= bangR)                                                // the blast front
+            col = lerp(hue(hash2(bangB) + T * 0.5) * 1.5, float3(1, 1, 0.9), pow(saturate((bangD - bangR + 0.12) / 0.12), 3.0));
+        else if (bangD > bangR && bangD < bangR * 1.5 && hash2(bangB + floor(T * 20.0)) > 0.96)   // sparks thrown ahead of it
+            col = hue(hash2(bangB * 1.3)) * (1.0 - bang);
+    }
 
     // between the throat and the city: a long stretch of grey static that slowly clears
     if (id == S_CITY && t < CITY_STATIC)
