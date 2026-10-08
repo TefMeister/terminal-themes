@@ -70,7 +70,8 @@ back to its very first frame and starts again.
    second to a smooth 60. Now and then a fish glitches into another: bones into a clownfish, a blue
    tang or a butterflyfish, and back.
 2. The radio swaps station (static, wavy interference, the picture rolling away) to skulls in
-   psychedelic colours flying diagonally at a smooth 30 frames a second.
+   psychedelic colours flying diagonally at a smooth 30 frames a second. Every few seconds they
+   glitch and come out of it flying a different diagonal.
 3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
    underneath: a striped sunrise with pyramids on the horizon, over a glassy grid floor with a finer
    grid between its lines, light running along them and the sun's reflection shimmering in it.
@@ -95,19 +96,20 @@ back to its very first frame and starts again.
    view, and the picture glitches into the next town. Each time the picture breaks into more pieces.
 8. A huge digital bottle on the left tips to the right, shrinking as it goes, and pours out numbers
    and letters in an arc across the screen. They grow as they fly and turn into earth, rock, water,
-   grass and lava, piling up until they fill the window.
-9. Those elements form a tunnel that collapses in on itself as time warps, tiles crumbling away
+   grass and lava, piling up until they fill the window, then dissolving block by block into the
+   tunnel.
+9. Those elements form a tunnel that slowly collapses in on itself as time warps, tiles crumbling away
    onto a second tunnel twisting the other way, while a hypnotic, colour-changing swirl spreads
    out of its middle and takes over, turning slowly, a long slow descent.
 10. Everything glitches to black, and old green computer lines flicker on the screen.
 11. Single eyes open one after another, scattered rather than in rows, big ones near and small dim
     ones far back, each looking its own way, until the window is full of them.
-12. Each eye glitches into a laughing mouth, in its own way (sliced, flickering, pixelated, stretched
+12. Each eye glitches into a chunky, pixelated laughing mouth, in its own way (sliced, flickering, pixelated, stretched
     or flashing colours). The mouths wear different lipsticks and laugh differently: cackling,
     guffawing, giggling, laughing like a maniac, or a trembling smile. Last of all a mouth appears
     small and far back in the middle, and grows until it swallows the scene, and the picture dives
     down its throat.
-13. Out over an endless ocean of numbers and letters, many of them made up, under a night city built
+13. A long stretch of grey TV static, which slowly clears onto an endless ocean of numbers and letters, many of them made up, under a night city built
     of letters, with a square moon. Then it glitches back to the fish bones.
 
 All through the second station, small things are off: a moment replays itself now and then, a seam
@@ -115,7 +117,7 @@ runs down the picture, patches show coarse as if they had not finished loading, 
 appear, and the skyline repeats itself.
 
 On top of all that, short glitches in random psychedelic colours come and go at random moments and
-for random lengths. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
+for random lengths, and thin glitch lines flick across the picture all the way through. Set `GLITCH_STRENGTH` to `0` at the top of `frequency.hlsl` to turn those off
 (the planned changes of station stay). How long each part lasts is set there too.
 
 ![The frequency style: twelve moments from one loop](preview/frequency.png)

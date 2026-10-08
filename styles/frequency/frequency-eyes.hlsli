@@ -22,6 +22,8 @@ static const float  FACE_GLITCH_SEC = 0.45;  // how long each one's glitch lasts
 static const float  MOUTH_LAST_AT  = 0.65;   // share of LIPS_SEC when the middle mouth appears
 static const float  MOUTH_START    = 0.05;   // its first size, share of the window height
 static const float  MOUTH_GROW     = 0.8;    // how fast it grows (it doubles about every 0.9 s)
+static const float  MOUTH_PIXELS   = 18.0;   // a mouth is this many big pixels across, whatever its size
+static const float  MIDDLE_PIXELS  = 26.0;   // the middle mouth, a little finer
 static const float3 IRISES[6]      = { float3(0.25, 0.55, 0.95), float3(0.30, 0.70, 0.30), float3(0.45, 0.28, 0.12),
                                        float3(0.60, 0.55, 0.20), float3(0.55, 0.30, 0.85), float3(0.85, 0.15, 0.15) };
 static const float3 LIPSTICKS[8]   = { float3(0.85, 0.05, 0.12), float3(1.00, 0.20, 0.60), float3(0.45, 0.05, 0.30),
@@ -154,7 +156,7 @@ float3 facesScene(float2 c, float2 grid, float tf)
         float  size  = grid.y * MOUTH_START * exp(gt * MOUTH_GROW);
         float2 q     = (c - grid * 0.5) / size;
         float  wide  = saturate((tf - throatFrom) / 1.0);
-        float4 r     = lipsAt(q, 777.0, tf, wide);
+        float4 r     = lipsAt((floor(q * MIDDLE_PIXELS) + 0.5) / MIDDLE_PIXELS, 777.0, tf, wide);
         bool   front = size > grid.y * 0.6;                    // once it is big, it is in front of everything
         if (r.a > 1.5 && tf > throatFrom)
         {
@@ -198,7 +200,8 @@ float3 facesScene(float2 c, float2 grid, float tf)
             if (style == 3) { q.y /= 1.0 + 3.0 * b; q.x *= 1.0 + 0.6 * b; mouth = gw > 0.5; }                              // stretch
             if (style == 4) { mouth = gw > 0.5; tint = lerp(float3(1, 1, 1), hue(hash(tick + id)) * 1.6, b); }             // colours
         }
-        float4 r = mouth ? lipsAt(q, id, tf, 0.0) : eyeAt(q, id, tf, saturate((tf - appear) / EYE_OPEN_SEC));
+        float4 r = mouth ? lipsAt((floor(q * MOUTH_PIXELS) + 0.5) / MOUTH_PIXELS, id, tf, 0.0)
+                         : eyeAt(q, id, tf, saturate((tf - appear) / EYE_OPEN_SEC));
         if (r.a > 0.0)
         {
             float3 rc = invert ? 1.0 - r.rgb : r.rgb;

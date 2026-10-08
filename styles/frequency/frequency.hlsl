@@ -40,13 +40,13 @@ static const float  ZOOM_SEC       = 2.5;
 static const float  SPACE_SEC      = 15.0;
 static const float  SUBURB_SEC     = 18.0;   // the second station starts here: three towns, 6 s each
 static const float  BOTTLE_SEC     = 8.0;
-static const float  TUNNEL_SEC     = 9.0;    // the tunnel collapsing...
+static const float  TUNNEL_SEC     = 12.0;   // the tunnel collapsing, slowly...
 static const float  SWIRL_SEC      = 6.0;    // ...and the swirl once it has taken over
 static const float  PC_SEC         = 4.0;
 static const float  EYES_SEC       = 9.0;
 static const float  LIPS_SEC       = 7.0;
 static const float  THROAT_SEC     = 4.0;
-static const float  CITY_SEC       = 15.0;
+static const float  CITY_SEC       = 19.0;   // the first CITY_STATIC of it is grey static
 static const float  START_AT       = 0.0;    // for trying things out: start this many seconds into the loop
 
 // --- random glitches between the planned ones ---
@@ -70,6 +70,18 @@ static const int    LIVE_X = 96, LIVE_KINDS = 3;     // living fish, to the righ
 static const int    DOG_S = 64, DOG_FRAMES = 8, DOG_Y = 48;
 static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;   // 32 real letters, 32 made-up
 static const int    SHEET_W = 512, SHEET_H = 128;
+
+// --- joins inside the second station ---
+static const float  BOTTLE_BLEND    = 2.5;   // seconds the bottle's heap takes to dissolve into the tunnel
+static const float  BLEND_BLOCK     = 6.0;   // size of the blocks it dissolves in, cells
+static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
+static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-many seconds
+
+// --- thin glitch lines, all the way through ---
+static const float  LINE_RATE       = 20.0;  // the lines change this many times a second
+static const float  LINE_SHARE      = 0.004; // share of rows hit at any moment (about two or three lines)
+static const float  LINE_BURST      = 0.02;  // ...rising to this in short bursts
+static const float  LINE_SHIFT      = 14.0;  // how far a hit row slides sideways, cells
 
 // --- the second station's feeling that something is not quite right ---
 static const float  UNCANNY_WINDOW  = 5.0;   // each window of this many seconds...
@@ -154,6 +166,13 @@ float4 sprite(int2 origin, int2 size, float2 local, float sc, bool flip)
 #include "frequency-space.hlsli"
 #include "frequency-dream.hlsli"
 #include "frequency-eyes.hlsli"
+
+// a short glitch each time the skulls change direction
+float skullTurnGlitch(float t)
+{
+    float x = wrap(t, SKULL_TURN_SEC);
+    return t > 1.0 && (x < 0.25 || x > SKULL_TURN_SEC - 0.1) ? 0.7 : 0.0;
+}
 
 float3 sceneColour(int id, float2 c, float2 grid, float t)
 {
@@ -259,8 +278,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float t = tl, tB = 0.0, rf = -1.0, rfHeavy = 0.0, tear = -1.0, zoomMix = -1.0, forced = 0.0, blackout = 0.0;
     if      (tl < E_FISH)   { id = S_FISH; t = tl; }
     else if (tl < E_RF1)    { id = S_FISH; t = tl; idB = S_SKULL; tB = tl - E_FISH; rf = (tl - E_FISH) / RF_SEC; rfHeavy = 0.3; }
-    else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; }
-    else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; }
+    else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; forced = skullTurnGlitch(t); }
+    else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; forced = skullTurnGlitch(t + SKULL_SEC); }
     else if (tl < E_BRIGHT) { id = S_BRIGHT; t = tl - E_SKULL; forced = 0.8 * saturate((tl - (E_BRIGHT - 1.5)) / 1.5); }
     else if (tl < E_RF2)    { id = S_BRIGHT; t = tl - E_SKULL; idB = S_POLKA; tB = tl - E_BRIGHT; rf = (tl - E_BRIGHT) / RF_SEC; rfHeavy = 0.9; }
     else if (tl < E_POLKA)  { id = S_POLKA; t = tl - E_BRIGHT; }
@@ -293,6 +312,20 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         g *= 0.4 + 0.6 * hash(seed * 0.71);
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
+
+    // thin glitch lines: a row or two slides sideways for a moment, now and then a little burst of them
+    float lslot = floor(T * LINE_RATE);
+    float lrow  = floor(c.y / 2.0);
+    float lrate = hash(floor(T * 1.5) * 0.77) < 0.15 ? LINE_BURST : LINE_SHARE;
+    bool  gline = hash2(float2(lrow, lslot)) < lrate;
+    if (gline) cc.x += floor((hash2(float2(lrow, lslot + 1.0)) - 0.5) * LINE_SHIFT * 2.0);
+
+    // the bottle's heap dissolves into the tunnel block by block
+    if (id == S_WARP && t < BOTTLE_BLEND && hash2(floor(c / (BLEND_BLOCK * gBase)) + 0.5) > smoothstep(0.0, 1.0, t / BOTTLE_BLEND))
+    {
+        id = S_BOTTLE;
+        t  = tl - E_SUB;
+    }
 
     // the second station never feels quite right: a moment replays itself now and then, a seam
     // runs down the picture, and patches render coarse as if they had not finished loading
@@ -337,6 +370,18 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float3 col = bar ? float3(0, 0, 0) : sceneColour(id, cc, grid, t);
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
+    if (gline) col = lerp(col * 1.3, hue(hash2(float2(lrow, lslot + 2.0))), 0.25);
+
+    // between the throat and the city: a long stretch of grey static that slowly clears
+    if (id == S_CITY && t < CITY_STATIC)
+    {
+        float n  = hash3(float3(c, floor(T * 30.0))).x;
+        float gr = 0.25 + 0.6 * n;
+        gr *= 0.85 + 0.15 * sin(c.y * 0.05 - T * 6.0);                           // a soft rolling band
+        if (hash2(float2(floor(c.y / 3.0), floor(T * 15.0))) < 0.02) gr = 0.9;   // bright tear lines
+        float strength = (1.0 - smoothstep(CITY_STATIC - CITY_CLEAR, CITY_STATIC, t)) * smoothstep(0.0, 0.4, t);
+        col = lerp(col * smoothstep(CITY_STATIC - CITY_CLEAR - 0.5, CITY_STATIC, t), float3(gr, gr, gr), strength);
+    }
     // everything glitches to black: bands of rows go out, more and more of them
     if (blackout > 0.0 && hash2(float2(floor(c.y / 4.0), floor(T * 15.0))) < blackout * 1.2) col = float3(0, 0, 0);
 

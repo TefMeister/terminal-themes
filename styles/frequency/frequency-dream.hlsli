@@ -55,7 +55,8 @@ static const float3 ELEMENTS[6]    = { float3(0.48, 0.47, 0.50), float3(0.45, 0.
 // --- the tunnel and the swirl ---
 static const float  WARP_TILES     = 22.0;   // element tiles round the tunnel
 static const float  WARP_DEPTH     = 3.0;    // tiles per unit of depth
-static const float  WARP_SPEED     = 0.55;   // flying in, slowly
+static const float  WARP_SPEED     = 0.2;    // flying in, slowly
+static const float  WARP_DRIFT     = 0.3;    // how quickly everything else in the tunnel moves (1 = the old pace)
 static const float  WARP_TWIST     = 2.2;    // how hard the tunnel twists once time is fully warped
 static const float  WARP_SWIRL_AT  = 3.0;    // seconds in, the swirl starts spreading from the middle
 static const float  SWIRL_ARMS     = 5.0;
@@ -273,7 +274,7 @@ float3 bottleScene(float2 c, float2 grid, float t)
     float rise = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.6);
     float B    = 6.0 * s;
     float bx   = floor(c.x / B);
-    float top  = grid.y - grid.y * 1.15 * rise * (0.55 + 0.45 * exp(-pow((c.x - land) / (grid.x * 0.35), 2.0))) - hash(bx) * 3.0 * s;
+    float top  = grid.y - grid.y * 1.15 * rise * lerp(0.55 + 0.45 * exp(-pow((c.x - land) / (grid.x * 0.35), 2.0)), 1.0, rise * rise) - hash(bx) * 3.0 * s;
     if (c.y > top) col = element(hash2(float2(bx, floor(c.y / B))) * 61.0, c / s, t) * (wrap(c.x, B) < 1.0 || wrap(c.y, B) < 1.0 ? 0.7 : 1.0);
 
     // the stream: letters leave the neck green and digital, then grow and turn into matter
@@ -324,7 +325,7 @@ float3 bottleScene(float2 c, float2 grid, float t)
 float3 warpScene(float2 c, float2 grid, float t)
 {
     float  collapse = saturate(t / TUNNEL_SEC);
-    float2 mid = grid * 0.5 + float2(sin(t * 0.7), cos(t * 0.53)) * grid.y * 0.05 * (1.0 + collapse);
+    float2 mid = grid * 0.5 + float2(sin(t * 0.7 * WARP_DRIFT), cos(t * 0.53 * WARP_DRIFT)) * grid.y * 0.05 * (1.0 + collapse);
     float2 d   = (c + 0.5 - mid) / grid.y;
     float  r   = length(d) + 1e-3;
     float  a   = atan2(d.y, d.x) / TAU;
@@ -344,7 +345,7 @@ float3 warpScene(float2 c, float2 grid, float t)
 
     // the tunnel of elements, closing in and twisting harder as it goes
     float z  = 0.22 / r * (1.0 + collapse * 1.6);
-    float u  = a + collapse * collapse * WARP_TWIST * z * 0.15 + t * 0.04;
+    float u  = a + collapse * collapse * WARP_TWIST * z * 0.15 + t * 0.04 * WARP_DRIFT;
     float v  = z + t * WARP_SPEED * (1.0 + collapse * 2.0);
     float2 tile = floor(float2(u * WARP_TILES, v * WARP_DEPTH));
     // tiles crumble and fall in, showing a second tunnel behind, twisted the other way
@@ -354,12 +355,12 @@ float3 warpScene(float2 c, float2 grid, float t)
     {
         layer = 1.0;
         u = a - collapse * WARP_TWIST * z * 0.1 + 0.5 / WARP_TILES;
-        v += (t - fallAt) * (t - fallAt) * 0.8;
+        v += (t - fallAt) * (t - fallAt) * 0.8 * WARP_DRIFT;
         tile = floor(float2(u * WARP_TILES, v * WARP_DEPTH));
     }
     float2 f = frac(float2(u * WARP_TILES, v * WARP_DEPTH));
     col = element(hash2(tile + layer * 7.0) * 61.0, f * 8.0 + tile * 8.0, t) * (layer > 0.0 ? 0.6 : 1.0);
     if (f.x < 0.06 || f.y < 0.08) col *= 0.45;                                   // the cracks between tiles
-    if (frac(v * 0.5 - t * 0.3) < 0.025) col = float3(0.7, 0.95, 1.0);            // rings of warped time
+    if (frac(v * 0.5 - t * 0.3 * WARP_DRIFT) < 0.025) col = float3(0.7, 0.95, 1.0);            // rings of warped time
     return col * saturate(1.3 - z * 0.09);
 }
