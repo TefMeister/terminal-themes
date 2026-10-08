@@ -18,6 +18,11 @@ static const float  TOON_FPS       = 12.0;   // the cartoon runs "on twos", like
 static const float  TOON_RUN       = 42.0;   // how fast the world scrolls past, sprite pixels per second
 static const float  TOON_DOG_SHARE = 0.34;   // dog height as a share of the picture
 static const float  TOON_IRIS_SEC  = 0.9;    // the iris opening at the start
+static const float  TOON_SPLIT_AT  = 5.0;    // seconds in, the dog glitches into himself and a mirror image
+static const float  TOON_SPLIT_SEC = 0.8;    // how long the split glitches
+static const float  TOON_SEP_MIN   = 0.04;   // the two dogs' distance from the middle, share of the picture...
+static const float  TOON_SEP_MAX   = 0.22;   // ...swinging between these
+static const float  TOON_SEP_RATE  = 0.9;    // how quickly they drift together and apart
 static const float3 INK            = float3(0.06, 0.06, 0.06);
 static const float3 PAPER          = float3(0.96, 0.96, 0.93);
 
@@ -89,17 +94,29 @@ float3 cartoon(float2 p, float2 size, float t)
         }
         if (p.y > ground + 3.0 * sc && wrap(wx, 23.0 * sc) < sc && hash(floor(wx / (23.0 * sc))) > 0.4 && p.y < ground + 6.0 * sc) col = INK;
     }
-    // the dog, and his shadow
+    // the dog, and his shadow. Partway in he glitches into two: himself and his mirror image,
+    // copying each other step for step, drifting closer together and further apart
     {
-        float dogX = size.x * 0.38 + sin(ts * 0.45) * size.x * 0.07;   // the camera keeps up, a little loosely
-        float2 org = float2(floor(dogX - DOG_S * 0.5 * sc), ground + 4.0 * sc - DOG_S * sc);
-        float2 sh  = (p - float2(dogX, ground + 3.0 * sc)) / float2(18.0 * sc, 2.5 * sc);
-        if (dot(sh, sh) < 1.0) col *= 0.6;
-        if (gSprites)
+        float dogX  = size.x * 0.38 + sin(ts * 0.45) * size.x * 0.07;   // the camera keeps up, a little loosely
+        float split = saturate((t - TOON_SPLIT_AT) / TOON_SPLIT_SEC);
+        bool  glitch = t > TOON_SPLIT_AT && t < TOON_SPLIT_AT + TOON_SPLIT_SEC;
+        float mid   = lerp(dogX, size.x * 0.5, split);
+        float sep   = split * size.x * (TOON_SEP_MIN + (TOON_SEP_MAX - TOON_SEP_MIN) * (0.5 + 0.5 * sin(ts * TOON_SEP_RATE)));
+        int   dogs  = t > TOON_SPLIT_AT ? 2 : 1;
+        if (glitch && hash(tick * 2.3) < 0.4) dogs = 1;                    // the split stutters in
+        float slice = glitch ? floor((hash(floor(p.y / (4.0 * sc)) + tick) - 0.5) * 10.0) * sc : 0.0;
+        int   frame = (int)wrap(tick, DOG_FRAMES);
+        [loop] for (int k = 0; k < dogs; k++)
         {
-            int frame = (int)wrap(tick, DOG_FRAMES);
-            float4 sp = sprite(int2(frame * DOG_S, DOG_Y), int2(DOG_S, DOG_S), p - org, sc, false);
-            if (sp.a > 0.5) col = sp.rgb;
+            float x = dogs == 1 ? mid : mid + (k == 0 ? -sep : sep);
+            float2 org = float2(floor(x - DOG_S * 0.5 * sc), ground + 4.0 * sc - DOG_S * sc);
+            float2 sh  = (p - float2(x, ground + 3.0 * sc)) / float2(18.0 * sc, 2.5 * sc);
+            if (dot(sh, sh) < 1.0) col *= 0.6;
+            if (gSprites)
+            {
+                float4 sp = sprite(int2(frame * DOG_S, DOG_Y), int2(DOG_S, DOG_S), p - org + float2(slice, 0.0), sc, k == 1);
+                if (sp.a > 0.5) col = glitch && k == 1 && hash(tick * 1.7) < 0.5 ? 1.0 - sp.rgb : sp.rgb;
+            }
         }
     }
     // old film: flicker, grain, scratches and dust, in a handful of greys

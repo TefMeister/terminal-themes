@@ -66,7 +66,9 @@ back to its very first frame and starts again.
 
 **The first station:**
 
-1. Fish bones cross the screen in lanes, stepping along at 2 frames a second.
+1. Fish bones cross the screen in lanes, each lane at its own frame rate, from a jerky 2 frames a
+   second to a smooth 60. Now and then a fish glitches into another: bones into a clownfish, a blue
+   tang or a butterflyfish, and back.
 2. The radio swaps station (static, wavy interference, the picture rolling away) to skulls in
    psychedelic colours flying diagonally at a smooth 30 frames a second.
 3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
@@ -76,26 +78,35 @@ back to its very first frame and starts again.
    sparks, pulses of current running through them and a dark hum bar rolling up.
 5. Another swap, to an old wooden TV on a papered wall, showing a black-and-white 1930s cartoon: a dog
    in trousers jogging from left to right with the camera following him, with film grain, scratches
-   and flicker.
+   and flicker. Partway in he glitches into two: himself and his mirror image, copying each other
+   step for step, drifting closer together and further apart.
 6. A heavy glitch tears the picture apart and dives into a tiny distant pattern, a grid inside a grid,
    which opens into an asteroid field of cubes in "the fifth dimension", every block filled with its own
-   wild colour. The camera flies through and pans round, the rocks slowly swelling and shrinking, and
-   now and then one glitches: its rows slide sideways, its colours flip and it blinks in and out.
+   wild colour, with lone single cubes floating between the clusters. The camera flies through and
+   pans round, the rocks slowly swelling and shrinking, and now and then one glitches: its rows slide
+   sideways, its colours flip and it blinks in and out. The lone cubes glitch most of all.
 
 **The second station**, where nothing is quite right:
 
-7. An idyllic American suburb seen from a distance: lawns, picket fences, pastel houses, a water
-   tower. Cube-shaped pockets of black hole open over it one by one, the town bending round each,
-   until the last one swallows the view.
-8. A digital bottle tips over and pours out numbers and letters, which grow as they fall and turn
-   into earth, rock, water, grass and lava, piling up until they fill the window.
+7. Three idyllic American suburbs in turn, seen from a distance: lawns, picket fences, bushes and
+   mailboxes, and six kinds of house (plain, two-storey, low ranch, hipped roof, with a garage, steep
+   A-frame), first by day, then at golden hour, then under a grey sky. In each a black hole emerges,
+   with a glowing disk round it, bending and swirling the town into itself until it swallows the
+   view, and the picture glitches into the next town. Each time the picture breaks into more pieces.
+8. A huge digital bottle on the left tips to the right, shrinking as it goes, and pours out numbers
+   and letters in an arc across the screen. They grow as they fly and turn into earth, rock, water,
+   grass and lava, piling up until they fill the window.
 9. Those elements form a tunnel that collapses in on itself as time warps, tiles crumbling away
    onto a second tunnel twisting the other way, while a hypnotic, colour-changing swirl spreads
-   out of its middle and takes over.
+   out of its middle and takes over, turning slowly, a long slow descent.
 10. Everything glitches to black, and old green computer lines flicker on the screen.
-11. Single eyes open one after another, each looking its own way, until the window is full of them.
-12. The eyes turn into laughing lips with teeth showing, each in a different lipstick, and the
-    picture dives down the throat of the last one, in the middle.
+11. Single eyes open one after another, scattered rather than in rows, big ones near and small dim
+    ones far back, each looking its own way, until the window is full of them.
+12. Each eye glitches into a laughing mouth, in its own way (sliced, flickering, pixelated, stretched
+    or flashing colours). The mouths wear different lipsticks and laugh differently: cackling,
+    guffawing, giggling, laughing like a maniac, or a trembling smile. Last of all a mouth appears
+    small and far back in the middle, and grows until it swallows the scene, and the picture dives
+    down its throat.
 13. Out over an endless ocean of numbers and letters, many of them made up, under a night city built
     of letters, with a square moon. Then it glitches back to the fish bones.
 
@@ -217,7 +228,7 @@ must stay next to `halloween.hlsl` if you copy them somewhere else.
 
 The fish bones, skulls, the cartoon dog and the letters are drawn in code by
 `styles/frequency/frequency-sprites.py` (needs Pillow; the letters, real and made-up, come from
-`frequency-glyphs.py` next to it), which rewrites `frequency-sheet.png`. Everything else is drawn by
+`frequency-glyphs.py` and the living fish from `frequency-livefish.py`, both next to it), which rewrites `frequency-sheet.png`. Everything else is drawn by
 the shader itself, which is split in six: `frequency-scenes.hlsli`, `frequency-tv.hlsli`,
 `frequency-space.hlsli`, `frequency-dream.hlsli` and `frequency-eyes.hlsli` must stay next to
 `frequency.hlsl`. A new tab takes a few seconds to start the picture while the terminal builds it.

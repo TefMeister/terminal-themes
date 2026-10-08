@@ -6,7 +6,7 @@
 //   an old wooden TV showing a 1930s cartoon dog in trousers jogging, the camera following ->
 //   a heavy glitch tears it apart, it zooms into a distant pattern, flies into a gridded
 //   asteroid field of wildly coloured, glitching cubes and pans around -> (radio swap) ->
-//   the second station, where nothing is quite right: black-hole cubes open over a suburb ->
+//   the second station, where nothing is quite right: black holes tear apart three suburbs ->
 //   a digital bottle pours letters that grow into earth, water and fire -> a tunnel of them
 //   collapses as time warps, a hypnotic swirl spreading out of it -> glitch to black, old green
 //   computer lines -> eyes opening one by one until the window is full -> laughing lips ->
@@ -38,7 +38,7 @@ static const float  TV_SEC         = 16.0;
 static const float  TEAR_SEC       = 2.5;
 static const float  ZOOM_SEC       = 2.5;
 static const float  SPACE_SEC      = 15.0;
-static const float  SUBURB_SEC     = 13.0;   // the second station starts here
+static const float  SUBURB_SEC     = 18.0;   // the second station starts here: three towns, 6 s each
 static const float  BOTTLE_SEC     = 8.0;
 static const float  TUNNEL_SEC     = 9.0;    // the tunnel collapsing...
 static const float  SWIRL_SEC      = 6.0;    // ...and the swirl once it has taken over
@@ -66,6 +66,7 @@ static const float  RF_WOBBLE      = 6.0;    // cells the picture wobbles sidewa
 // --- sprite sheet layout (matches frequency-sprites.py) ---
 static const int    FISH_W = 48, FISH_H = 24, FISH_KINDS = 3, FISH_Y = 0;
 static const int    SKULL_S = 24, SKULL_KINDS = 4, SKULL_Y = 24;
+static const int    LIVE_X = 96, LIVE_KINDS = 3;     // living fish, to the right of the skulls
 static const int    DOG_S = 64, DOG_FRAMES = 8, DOG_Y = 48;
 static const int    GLYPH_W = 6, GLYPH_H = 8, GLYPH_Y = 112, GLYPH_COUNT = 64;   // 32 real letters, 32 made-up
 static const int    SHEET_W = 512, SHEET_H = 128;
@@ -168,9 +169,8 @@ float3 sceneColour(int id, float2 c, float2 grid, float t)
     [branch] if (id == S_BOTTLE)  return bottleScene(c, grid, t);
     [branch] if (id == S_WARP)    return warpScene(c, grid, t);
     [branch] if (id == S_PC)      return pcScene(c, grid, t);
-    [branch] if (id == S_EYES)    return eyesScene(c, grid, t);
-    [branch] if (id == S_LIPS)    return lipsScene(c, grid, t);
-    [branch] if (id == S_THROAT)  return throatScene(c, grid, t);
+    [branch] if (id >= S_EYES && id <= S_THROAT)                  // one scene in three parts, built once
+        return facesScene(c, grid, t + (id >= S_LIPS ? EYES_SEC : 0.0) + (id == S_THROAT ? LIPS_SEC : 0.0));
     [branch] if (id == S_CITY)    return cityScene(c, grid, t);
     return float3(0, 0, 0);
 }
@@ -270,7 +270,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_ZOOM)   { id = S_ZOOM; t = tl - E_TEAR; zoomMix = (tl - E_TEAR) / ZOOM_SEC; }
     else if (tl < E_SPACE)  { id = S_SPACE; t = tl - E_ZOOM; forced = 0.6 * saturate((tl - (E_SPACE - 1.0)) / 1.0); }
     else if (tl < E_RF4)    { id = S_SPACE; t = tl - E_ZOOM; idB = S_SUBURB; tB = tl - E_SPACE; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.5; }
-    else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; forced = 0.6 * saturate((tl - (E_SUB - 0.7)) / 0.7); }
+    else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; float pb = wrap(t, SUB_PHASE_SEC);
+                              forced = t > 1.0 && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
     else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; forced = 0.6 * saturate(1.0 - (tl - E_SUB) / 0.5); }
     else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = saturate((tl - (E_WARP - 1.2)) / 1.2); blackout = saturate((tl - (E_WARP - 0.8)) / 0.8); }
     else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.8 * saturate(1.0 - (tl - E_WARP) / 0.6); }
