@@ -292,7 +292,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     if      (tl < E_FISH)   { id = S_FISH; t = tl; }
     else if (tl < E_RF1)    { id = S_FISH; t = tl; idB = S_SKULL; tB = tl - E_FISH; rf = (tl - E_FISH) / RF_SEC; rfHeavy = 0.3; }
     else if (tl < E_SKULL)  { id = S_SKULL; t = tl - E_FISH; forced = skullTurnGlitch(t); }
-    else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; forced = skullTurnGlitch(t + SKULL_SEC); }
+    else if (tl < E_CRUMB)  { id = S_CRUMBLE; t = tl - E_SKULL; forced = skullTurnGlitch(t + SKULL_SEC + RF_SEC); }
     else if (tl < E_BRIGHT) { id = S_BRIGHT; t = tl - E_SKULL; forced = 0.8 * saturate((tl - (E_BRIGHT - 1.5)) / 1.5); }
     else if (tl < E_RF2)    { id = S_BRIGHT; t = tl - E_SKULL; idB = S_POLKA; tB = tl - E_BRIGHT; rf = (tl - E_BRIGHT) / RF_SEC; rfHeavy = 0.5; }
     else if (tl < E_POLKA)  { id = S_POLKA; t = tl - E_BRIGHT; }
@@ -303,7 +303,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_SPACE)  { id = S_SPACE; t = tl - E_ZOOM; forced = 0.6 * saturate((tl - (E_SPACE - 1.0)) / 1.0); }
     else if (tl < E_RF4)    { id = S_SPACE; t = tl - E_ZOOM; idB = S_SUBURB; tB = tl - E_SPACE; rf = (tl - E_SPACE) / RF_SEC; rfHeavy = 0.5; }
     else if (tl < E_SUB)    { id = S_SUBURB; t = tl - E_SPACE; float pb = wrap(t, SUB_PHASE_SEC);
-                              forced = t > 1.0 && t < SUBURB_SEC - SUB_DIVE && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
+                              forced = t > 1.0 && t < SUB_SPAN - SUB_DIVE && (pb < 0.4 || pb > SUB_PHASE_SEC - 0.5) ? 0.75 : 0.0; }
     else if (tl < E_BOTTLE) { id = S_BOTTLE; t = tl - E_SUB; }
     else if (tl < E_WARP)   { id = S_WARP; t = tl - E_BOTTLE; forced = 0.7 * saturate((tl - (E_WARP - BLACKOUT_SEC)) / BLACKOUT_SEC); blackout = saturate((tl - (E_WARP - BLACKOUT_SEC)) / BLACKOUT_SEC); }
     else if (tl < E_PC)     { id = S_PC; t = tl - E_WARP; forced = 0.5 * saturate(1.0 - (tl - E_WARP) / 1.0); }
@@ -419,13 +419,13 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     if (bang >= 0.0)
     {
         float tb = t;
-        col = lerp(col, float3(1, 1, 1), saturate(1.0 - tb * 8.0) * 0.7);                        // the first flash
+        col = lerp(col, float3(1, 1, 1), saturate(1.0 - tb * 5.0));                              // the first flash, at once
         if (bangD > bangR && hash2(bangB + floor(T * 20.0)) > 0.97) col = hue(hash2(bangB * 1.3)) * 0.6;   // sparks in the void
         [loop] for (int k = 0; k < BANG_RINGS; k++)
         {
             float age = tb - k * BANG_GAP;
             if (age < 0.0) break;
-            float r = 0.02 * exp(age * BANG_GROW);
+            float r = 0.06 * exp(age * BANG_GROW);
             float w = max(0.015, r * 0.1);
             if (abs(bangD - r) < w)
             {

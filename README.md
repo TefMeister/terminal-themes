@@ -100,12 +100,12 @@ already playing below, the two dissolving into each other inside it.
    colours drain as it goes, from far too vibrant to bleak browns and yellows. Twice the picture
    glitches into another version of the town (golden hour, then grey), each bleaker, more warped and
    more broken than the last. Then the camera dives into the hole, into a tube of pixelated big
-   bangs going off one after another, which opens onto the next scene.
+   bangs going off the moment it reaches the hole, one after another, which opens onto the next scene.
 8. A huge digital bottle travels in an arc over the top of the screen from left to right, tipped
-   over and pouring out numbers and letters, shrinking until it is gone. The letters and the
-   cubes they become are solid and spread out in depth, near ones big and bright, far ones small,
-   dim and hidden behind the heap. They grow as they fly and turn into earth, rock, water,
-   grass and lava, piling up until they fill the window, then dissolving block by block into the
+   over and pouring out numbers and letters, shrinking until it is gone. The letters are caught by
+   a slowly turning swirl, on the same arms as the hypnotic swirl that comes later, and ride its
+   arms inward as they turn into solid cubes, near ones big and bright, far ones small and dim.
+   The arms fill up with cubes until they cover the window, then dissolve block by block into the
    tunnel.
 9. Those elements form a tunnel that slowly collapses in on itself as time warps, tiles crumbling away
    onto a second tunnel twisting the other way, while a hypnotic, colour-changing swirl spreads

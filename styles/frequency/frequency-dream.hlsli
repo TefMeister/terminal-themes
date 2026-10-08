@@ -7,7 +7,8 @@
 // Included by frequency.hlsl, which holds the shared helpers.
 
 // --- the suburb: three towns in turn, each swallowed by a black hole, more broken each time ---
-static const float  SUB_PHASE_SEC  = 5.0;    // each town lasts this long (three of them fill SUBURB_SEC)
+static const float  SUB_SPAN       = SUBURB_SEC + RF_SEC;   // the suburb's clock starts with the radio swap into it
+static const float  SUB_PHASE_SEC  = SUB_SPAN / 3.0;        // each of the three towns lasts this long
 static const float  SUB_HORIZON    = 0.42;   // share of the height down to the horizon
 static const int    SUB_ROWS       = 6;      // rows of houses from far to near
 static const float  SUB_HOUSE_W    = 48.0;   // space for one house, cells at the smallest size
@@ -31,8 +32,8 @@ static const float3 SUB_ROOFS[5]   = { float3(0.55, 0.18, 0.15), float3(0.30, 0.
 static const float3 SUB_DOORS[4]   = { float3(0.70, 0.12, 0.12), float3(0.15, 0.25, 0.55), float3(0.45, 0.25, 0.15), float3(0.10, 0.10, 0.10) };
 static const float2 SUB_HOLE_AT    = float2(0.5, 0.42);   // the black hole sits in the middle, on the horizon
 static const float  SUB_BH_START   = 0.015;  // its size as it emerges, share of the window height...
-static const float  SUB_BH_END     = 0.30;   // ...and by the time the camera dives in
-static const float  SUB_DIVE       = 2.0;    // seconds the camera takes to dive into it
+static const float  SUB_BH_END     = 0.20;   // ...and by the time the camera dives in
+static const float  SUB_DIVE       = 1.2;    // seconds the camera takes to dive into it
 static const float  SUB_DIVE_ZOOM  = 3.2;    // how far the dive zooms in
 static const int    SUB_DEBRIS     = 48;     // bits of the town flying into it
 static const float  SUB_WARP       = 7.0;    // how far the picture warps by the end, cells
@@ -56,16 +57,16 @@ static const float2 BOTTLE_FROM    = float2(0.12, 0.62);   // where it starts, s
 static const float2 BOTTLE_TO      = float2(0.95, 0.50);   // ...where it ends...
 static const float  BOTTLE_ARC     = 0.45;   // ...and how high it arcs over the top in between
 static const float  BOTTLE_THROW   = 0.15;   // how fast the letters leave the neck, window widths per second
-static const float  BOTTLE_DROP    = 1.1;    // how fast they fall, window widths per second per second
 static const float  BOTTLE_SPOUT   = 0.035;  // seconds between letters pouring out
 static const int    BOTTLE_STREAM  = 48;     // letters in the air at once
 static const float  BOTTLE_GROW    = 2.2;    // how fast a letter grows, sprite sizes per second
 static const float  BOTTLE_MATTER  = 0.45;   // seconds after leaving before a letter becomes matter
 static const float  BOTTLE_FAR     = 0.5;    // size of the furthest letters and cubes, against the nearest...
 static const float  BOTTLE_NEAR    = 1.6;    // ...which are this big
-static const float  BOTTLE_SPREAD  = 0.3;    // near ones drift outward, far ones inward, window widths per second
+static const float  BOTTLE_INWARD  = 0.9;    // how fast letters ride the swirl's arms inward (they shrink their distance e times this often a second)
+static const float  BOTTLE_TURN    = 0.35;   // how fast the cubes filling the arms turn, radians per second
 static const float  BOTTLE_THICK   = 0.35;   // how far each letter's and cube's side reaches back, share of its width
-static const float  BOTTLE_BEHIND  = 0.35;   // anything further away than this is hidden behind the heap
+static const float  BOTTLE_BEHIND  = 0.35;   // anything further away than this is hidden behind the swirling matter
 static const float3 BOTTLE_GLASS   = float3(0.40, 1.00, 0.80);
 static const float3 BOTTLE_DIGITS  = float3(0.30, 1.00, 0.45);
 static const float3 ELEMENTS[6]    = { float3(0.48, 0.47, 0.50), float3(0.45, 0.28, 0.14), float3(0.26, 0.62, 0.20),
@@ -256,7 +257,7 @@ float3 suburbScene(float2 c, float2 grid, float t)
 {
     int    set  = min(2, (int)floor(t / SUB_PHASE_SEC));
     float2 m    = grid * SUB_HOLE_AT;
-    float  life = SUBURB_SEC - SUB_DIVE;
+    float  life = SUB_SPAN - SUB_DIVE;
     float  b    = saturate(t / life);                                  // how far gone: 0 bright and whole, 1 bleak and broken
     // the camera dives into the hole at the end
     float  dk   = saturate((t - life) / SUB_DIVE);
@@ -327,7 +328,7 @@ float3 suburbScene(float2 c, float2 grid, float t)
     if (rc < R) col = float3(0, 0, 0);
     else if (rc < R * 1.08 + 1.0 / zoom) col = lerp(SUB_DISK_HOT, col, 0.3);
     if (band && q.y >= 0.0) col = lerp(col, disk, 0.9);
-    return col * (1.0 - smoothstep(0.85, 1.0, dk));                     // and everything goes black
+    return col;                                                          // the hole fills the window; the big bang follows at once
 }
 
 // where the bottle is at a moment: it starts huge on the left and arcs over the top to the right,
@@ -356,29 +357,33 @@ float3 bottleScene(float2 c, float2 grid, float t)
 
     float2 pivot, tip, spout; float tilt, bs;
     bottlePose(t, grid, pivot, tilt, bs, tip, spout);
-    float  speed = grid.x * BOTTLE_THROW, drop = grid.x * BOTTLE_DROP;
+    float  speed = grid.x * BOTTLE_THROW;
 
-    // the heap of matter at the bottom, growing until it fills the window: stacked cubes, each lit
-    // on top and shaded on its right, the far (upper) part of the heap darker
-    float land = clamp(tip.x, grid.x * 0.15, grid.x * 0.9);
-    float rise = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.6);
-    float B    = 6.0 * s;
-    float bx   = floor(c.x / B);
-    float top  = grid.y - grid.y * 1.15 * rise * lerp(0.55 + 0.45 * exp(-pow((c.x - land) / (grid.x * 0.35), 2.0)), 1.0, rise * rise) - hash(bx) * 3.0 * s;
-    bool  inHeap = c.y > top;
-    if (inHeap)
+    // the poured matter fills the window as a swirl, on the same arms as the hypnotic swirl that comes
+    // later: the arms turn, grow thicker and thicker with cubes, and finally cover everything
+    float2 sc   = grid * 0.5;
+    float2 sd   = (c + 0.5 - sc) / grid.y;
+    float  sr   = length(sd) + 1e-3;
+    float  sa   = atan2(sd.y, sd.x) / TAU;
+    float  st   = t - BOTTLE_SEC;                                            // in step with the swirl that follows
+    float  fill = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.3);
+    float  arm  = frac(sa * SWIRL_ARMS + log(sr) * SWIRL_TIGHT - st * SWIRL_SPIN);
+    float  B    = 6.0 * s;
+    float2 bq   = rot2(c - sc, -st * BOTTLE_TURN);                            // the cubes turn with the arms
+    float2 bk   = floor(bq / B);
+    bool   inSwirl = arm < fill * (0.9 + 0.2 * hash2(bk + 0.5)) && fill > 0.0;
+    if (inSwirl)
     {
-        float2 bl = float2(wrap(c.x, B), wrap(c.y, B));
-        col = element(hash2(float2(bx, floor(c.y / B))) * 61.0, c / s, t);
-        col *= bl.y < B * 0.3 ? 1.25 : (bl.x > B * 0.7 ? 0.65 : 1.0);
-        col *= lerp(0.55, 1.1, saturate((c.y - top) / (grid.y * 0.35)));
+        float2 bl = bq - bk * B;
+        col = element(hash2(bk) * 61.0, bq / s, t);
+        col *= bl.y < B * 0.3 ? 1.25 : (bl.x > B * 0.7 ? 0.65 : 1.0);         // lit on top, shaded on the right
+        col *= lerp(0.55, 1.1, saturate(sr * 2.0));                          // darker towards the deep middle
+        if (arm > fill * 0.85) col *= 1.3;                                   // the growing edge of each arm catches the light
     }
-    else if (c.y > top - B * 0.6 && rise > 0.0)                                   // the top faces of the surface cubes
-        col = element(hash2(float2(bx, floor(top / B) + 1.0)) * 61.0, c / s, t) * 1.3 * 0.55;
 
-    // the stream: letters leave the neck green and digital, then grow and turn into matter. Each
-    // has its own distance: near ones are big and bright, far ones small, dim and hidden by the
-    // heap, and all of them are solid, showing their top and right side
+    // the stream: letters leave the neck green and digital, get caught by the swirl and ride its arms
+    // inward as they turn into matter. Each has its own distance: near ones are big and bright, far
+    // ones small, dim and hidden by the swirl, and all of them are solid, showing their top and side
     if (t > BOTTLE_TIP_SEC)
     {
         float  newest = floor(t / BOTTLE_SPOUT);
@@ -387,22 +392,25 @@ float3 bottleScene(float2 c, float2 grid, float t)
         [loop] for (int i = 0; i < BOTTLE_STREAM; i++)
         {
             float n   = newest - i;
-            float age = t - n * BOTTLE_SPOUT;
-            if (n * BOTTLE_SPOUT < BOTTLE_TIP_SEC) break;
+            float te  = n * BOTTLE_SPOUT;
+            float age = t - te;
+            if (te < BOTTLE_TIP_SEC) break;
             float z = hash(n + 5.5);
             if (z <= bestZ) continue;
             float2 ep, et, es; float etl, ebs;                              // where the bottle was when it left
-            bottlePose(n * BOTTLE_SPOUT, grid, ep, etl, ebs, et, es);
-            float2 ep2, et2, es2; float etl2, ebs2;                        // the bottle's own movement carries them on
-            bottlePose(n * BOTTLE_SPOUT + 0.05, grid, ep2, etl2, ebs2, et2, es2);
-            float2 v0  = es * speed * (0.85 + 0.3 * hash(n)) + (et2 - et) / 0.05 + float2((hash(n + 3.0) - 0.5) * 0.2 * speed, 0.0);
-            float2 pos = et + v0 * age + float2(0.0, 0.5 * drop * age * age) + float2((z - 0.5) * grid.x * BOTTLE_SPREAD * age, 0.0);
+            bottlePose(te, grid, ep, etl, ebs, et, es);
+            float2 d0 = (et + es * speed * 0.15 - sc) / grid.y;              // just out of the neck
+            float  r0 = length(d0) + 1e-3;
+            float  u0 = atan2(d0.y, d0.x) / TAU * SWIRL_ARMS + log(r0) * SWIRL_TIGHT - (te - BOTTLE_SEC) * SWIRL_SPIN;
+            float  rr = r0 * exp(-age * BOTTLE_INWARD * (0.7 + 0.6 * hash(n + 2.0)));
+            float  aa = (u0 + (t - BOTTLE_SEC) * SWIRL_SPIN - log(rr) * SWIRL_TIGHT) / SWIRL_ARMS;   // riding its arm
+            float2 pos = sc + float2(cos(aa * TAU), sin(aa * TAU)) * rr * grid.y * lerp(0.9, 1.1, z);
             float  g   = max(s, floor(max(s, ebs * 0.4) * lerp(BOTTLE_FAR, BOTTLE_NEAR, z))) * (1.0 + floor(age * BOTTLE_GROW));
             float2 box = float2(GLYPH_W, GLYPH_H) * g;
             float  e   = box.x * BOTTLE_THICK;                              // how far its side reaches back
             float2 l   = c - (pos - box * 0.5);
             if (l.x < 0.0 || l.x >= box.x + e || l.y < -0.6 * e || l.y >= box.y) continue;
-            if (pos.y > top + box.y || (inHeap && z < BOTTLE_BEHIND)) continue;
+            if (inSwirl && z < BOTTLE_BEHIND) continue;
             float  light = lerp(0.45, 1.1, z);
             float3 hit = float3(-1, -1, -1);
             if (age < BOTTLE_MATTER)
