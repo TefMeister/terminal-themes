@@ -1,5 +1,5 @@
 // Frequency: a pixel-art background that keeps changing station, drawn behind the text.
-// One loop of nearly three minutes on two stations, then back to the very first frame:
+// One loop of nearly two and a half minutes on two stations, ending where it began:
 //   fish bones crossing at 2 frames a second -> (radio swap) -> skulls flying diagonally at 30 ->
 //   the picture cracks into boxes that crumble away, showing a brighter world underneath ->
 //   (glitch, radio swap) -> polka dots humming on unstable electricity -> (radio swap) ->

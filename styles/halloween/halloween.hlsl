@@ -259,11 +259,16 @@ static const float  HANG_SCALE     = 0.45;   // spider size, relative to its tre
 static const float  HANG_CYCLE     = 26.0;   // seconds between drops of the same spider
 static const float3 THREAD_COLOUR  = float3(0.40, 0.40, 0.46);
 
-// --- looping, for recording a clip ---
-// 0 = off: the picture runs freely, as it should in the terminal. Set it to a number of seconds and
-// everything repeats exactly that often, so a recording of that length loops without a seam.
-// Use a length that fits one ghost visit and a whole number of every animation's frames: 32 works.
-static const float  LOOP_SECONDS   = 0.0;
+// --- looping ---
+// Everything repeats exactly every LOOP_SECONDS: the zombies wandering, the hut brewing, the smoke,
+// the witches, the spiders, and GHOST_PERIOD's ghost visits, so the night runs as one endless loop and
+// a recording of one loop joins without a seam. The length must fit a whole number of every
+// animation's frames: 450 holds all ten of the ghost's visits at the usual pace (32 is used for the short preview
+// clip). 0 switches looping off and lets the picture run freely, never quite repeating.
+// LOOP_START puts the loop's join in the quiet part of the night: this many seconds into a ghost
+// visit's turn, halfway between the last visit's flight ending and the first one's darkening sky.
+static const float  LOOP_SECONDS   = 450.0;
+static const float  LOOP_START     = 37.0;
 static const float  TAU            = 6.28318530718;
 
 // --- user messages (same marker the Matrix Claude theme uses) ---
@@ -488,9 +493,10 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float  size  = CELL_PIXELS * s;
     int2   cell  = int2(floor(pos.xy / size));
     float2 grid  = floor(Resolution / size);
-    int    tick  = (int)floor(Time * FPS);
+    float  Tn    = Time + LOOP_START;                  // the loop's own clock, its join in the quiet part
+    int    tick  = (int)floor(Tn * FPS);
     float  T     = tick / FPS;
-    float  Tf    = floor(Time * FLASH_FPS) / FLASH_FPS;
+    float  Tf    = floor(Tn * FLASH_FPS) / FLASH_FPS;
     float  dth   = dither(cell);
     float2 c     = float2(cell) + 0.5;
     float  horizonY = floor(grid.y * HORIZON);
