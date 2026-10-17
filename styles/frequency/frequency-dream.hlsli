@@ -1,8 +1,8 @@
 // Frequency, part 5: the second station, first half. An idyllic American suburb seen from a
 // distance, a black hole growing in the middle of it and swallowing it, debris flying in, the town
 // glitching twice into bleaker, more broken versions of itself, until the camera dives in; a
-// digital bottle tipping over and pouring out numbers and letters that grow into earth, rock,
-// water and fire; then a tunnel built of those elements, collapsing in on itself as time warps,
+// digital bottle tipping over and pouring out fine coloured sand, green digits at first, that fans
+// out over a swirl and fills it; then a tunnel built of those elements, collapsing in on itself as time warps,
 // with a hypnotic colour-changing swirl spreading out of its middle.
 // Included by frequency.hlsl, which holds the shared helpers.
 
@@ -57,16 +57,18 @@ static const float2 BOTTLE_FROM    = float2(0.12, 0.62);   // where it starts, s
 static const float2 BOTTLE_TO      = float2(0.95, 0.50);   // ...where it ends...
 static const float  BOTTLE_ARC     = 0.45;   // ...and how high it arcs over the top in between
 static const float  BOTTLE_THROW   = 0.15;   // how fast the letters leave the neck, window widths per second
-static const float  BOTTLE_SPOUT   = 0.035;  // seconds between letters pouring out
-static const int    BOTTLE_STREAM  = 48;     // letters in the air at once
-static const float  BOTTLE_GROW    = 2.2;    // how fast a letter grows, sprite sizes per second
-static const float  BOTTLE_MATTER  = 0.45;   // seconds after leaving before a letter becomes matter
-static const float  BOTTLE_FAR     = 0.5;    // size of the furthest letters and cubes, against the nearest...
-static const float  BOTTLE_NEAR    = 1.6;    // ...which are this big
-static const float  BOTTLE_INWARD  = 0.9;    // how fast letters ride the swirl's arms inward (they shrink their distance e times this often a second)
-static const float  BOTTLE_TURN    = 0.35;   // how fast the cubes filling the arms turn, radians per second
-static const float  BOTTLE_THICK   = 0.35;   // how far each letter's and cube's side reaches back, share of its width
-static const float  BOTTLE_BEHIND  = 0.35;   // anything further away than this is hidden behind the swirling matter
+static const float  BOTTLE_SPOUT   = 0.022;  // seconds between puffs of sand pouring out
+static const int    BOTTLE_STREAM  = 72;     // puffs in the air at once
+static const float  BOTTLE_MATTER  = 0.2;    // seconds after leaving before the sand turns from green digits to every colour
+static const float  BOTTLE_INWARD  = 0.9;    // how fast the poured sand rides the swirl's arms inward (its distance shrinks e times this often a second)
+static const float  BOTTLE_BEHIND  = 0.35;   // anything further away than this is hidden behind the swirling sand
+static const float  SAND_GRAIN     = 1.0;    // one grain of sand, cells at the smallest size
+static const float  SAND_DENSE     = 0.72;   // share of the grain grid that holds a grain (the rest is the dark between them)
+static const float  SAND_PUFF      = 6.0;    // the pour is this many cells thick as it leaves the neck...
+static const float  SAND_SPREAD    = 12.0;   // ...and spreads this many cells wider every second, fanning over the swirl
+static const float  SAND_ROUND     = 700.0;  // grains round one turn of the swirl's grain grid...
+static const float  SAND_ALONG     = 120.0;  // ...and per unit of log-distance along it (the grid rides the arms inward)
+static const float  SAND_FLOW      = 0.35;   // how fast the swirl's sand pours inward (log-distance per second)
 static const float3 BOTTLE_GLASS   = float3(0.40, 1.00, 0.80);
 static const float3 BOTTLE_DIGITS  = float3(0.30, 1.00, 0.45);
 static const float3 ELEMENTS[6]    = { float3(0.48, 0.47, 0.50), float3(0.45, 0.28, 0.14), float3(0.26, 0.62, 0.20),
@@ -103,6 +105,13 @@ float3 element(float id, float2 p, float t)
     return col;
 }
 
+// one grain of digital sand: a bright colour, now and then a pale or white one
+float3 sandColour(float h)
+{
+    float3 k = hue(frac(h * 7.0));
+    k = lerp(k, float3(1, 1, 1), 0.2 + 0.5 * step(0.9, frac(h * 13.0)));
+    return k * (0.75 + 0.45 * frac(h * 29.0));
+}
 float2 rot2(float2 p, float a) { float c = cos(a), s = sin(a); return float2(p.x * c - p.y * s, p.x * s + p.y * c); }
 
 // one house of one of six kinds: plain gable, two storeys, low ranch, hipped roof, with a garage,
@@ -359,8 +368,9 @@ float3 bottleScene(float2 c, float2 grid, float t)
     bottlePose(t, grid, pivot, tilt, bs, tip, spout);
     float  speed = grid.x * BOTTLE_THROW;
 
-    // the poured matter fills the window as a swirl, on the same arms as the hypnotic swirl that comes
-    // later: the arms turn, grow thicker and thicker with cubes, and finally cover everything
+    // the poured sand fills the window as a swirl, on the same arms as the hypnotic swirl that comes
+    // later: the arms turn and grow thicker and thicker with fine coloured grains pouring inward along
+    // them, and finally cover everything
     float2 sc   = grid * 0.5;
     float2 sd   = (c + 0.5 - sc) / grid.y;
     float  sr   = length(sd) + 1e-3;
@@ -368,22 +378,18 @@ float3 bottleScene(float2 c, float2 grid, float t)
     float  st   = t - BOTTLE_SEC;                                            // in step with the swirl that follows
     float  fill = pow(saturate((t - BOTTLE_TIP_SEC) / (BOTTLE_SEC - BOTTLE_TIP_SEC)), 1.3);
     float  arm  = frac(sa * SWIRL_ARMS + log(sr) * SWIRL_TIGHT - st * SWIRL_SPIN);
-    float  B    = 6.0 * s;
-    float2 bq   = rot2(c - sc, -st * BOTTLE_TURN);                            // the cubes turn with the arms
-    float2 bk   = floor(bq / B);
-    bool   inSwirl = arm < fill * (0.9 + 0.2 * hash2(bk + 0.5)) && fill > 0.0;
+    float2 fk   = floor(float2(sa * SAND_ROUND, (log(sr) + st * SAND_FLOW) * SAND_ALONG));   // the grain grid, riding the arms inward
+    bool   inSwirl = fill > 0.0 && arm < fill * (0.9 + 0.2 * hash2(floor(fk / 6.0) + 0.5));
     if (inSwirl)
     {
-        float2 bl = bq - bk * B;
-        col = element(hash2(bk) * 61.0, bq / s, t);
-        col *= bl.y < B * 0.3 ? 1.25 : (bl.x > B * 0.7 ? 0.65 : 1.0);         // lit on top, shaded on the right
+        col = hash2(fk) < SAND_DENSE ? sandColour(hash2(fk + 3.0)) : float3(0.03, 0.03, 0.05);   // a grain, or the dark between grains
         col *= lerp(0.55, 1.1, saturate(sr * 2.0));                          // darker towards the deep middle
         if (arm > fill * 0.85) col *= 1.3;                                   // the growing edge of each arm catches the light
     }
 
-    // the stream: letters leave the neck green and digital, get caught by the swirl and ride its arms
-    // inward as they turn into matter. Each has its own distance: near ones are big and bright, far
-    // ones small, dim and hidden by the swirl, and all of them are solid, showing their top and side
+    // the stream: fine digital sand pours out of the neck, green digits at first and every colour a moment
+    // later, gets caught by the swirl and fans out over its arms as it rides them inward. It is drawn as a
+    // chain of small puffs of grains, each thickening as it travels; near puffs are bright, far ones dim
     if (t > BOTTLE_TIP_SEC)
     {
         float  newest = floor(t / BOTTLE_SPOUT);
@@ -405,39 +411,15 @@ float3 bottleScene(float2 c, float2 grid, float t)
             float  rr = r0 * exp(-age * BOTTLE_INWARD * (0.7 + 0.6 * hash(n + 2.0)));
             float  aa = (u0 + (t - BOTTLE_SEC) * SWIRL_SPIN - log(rr) * SWIRL_TIGHT) / SWIRL_ARMS;   // riding its arm
             float2 pos = sc + float2(cos(aa * TAU), sin(aa * TAU)) * rr * grid.y * lerp(0.9, 1.1, z);
-            float  g   = max(s, floor(max(s, ebs * 0.4) * lerp(BOTTLE_FAR, BOTTLE_NEAR, z))) * (1.0 + floor(age * BOTTLE_GROW));
-            float2 box = float2(GLYPH_W, GLYPH_H) * g;
-            float  e   = box.x * BOTTLE_THICK;                              // how far its side reaches back
-            float2 l   = c - (pos - box * 0.5);
-            if (l.x < 0.0 || l.x >= box.x + e || l.y < -0.6 * e || l.y >= box.y) continue;
+            float  pr  = s * (SAND_PUFF + age * SAND_SPREAD) * lerp(0.7, 1.3, z);
+            float  dd  = length(c + 0.5 - pos);
+            if (dd > pr) continue;
             if (inSwirl && z < BOTTLE_BEHIND) continue;
-            float  light = lerp(0.45, 1.1, z);
-            float3 hit = float3(-1, -1, -1);
-            if (age < BOTTLE_MATTER)
-            {
-                // a digital letter, three copies stepping back to give it a body
-                float gi = hash(n * 1.7) * GLYPH_COUNT;
-                if (all(l < box) && glyphPixel(gi, l / g) > 0.5) hit = lerp(BOTTLE_DIGITS, float3(1, 1, 1), hash(n + 9.0) * 0.5);
-                else
-                    [loop] for (int j = 1; j <= 3; j++)
-                    {
-                        float k = e * j / 3.0;
-                        if (glyphPixel(gi, (l - float2(k, -0.6 * k)) / g) > 0.5) { hit = BOTTLE_DIGITS * lerp(0.6, 0.35, j / 3.0); break; }
-                    }
-            }
-            else
-            {
-                // a cube of matter: its front, and the top and right faces behind it
-                float3 m = element(hash(n * 2.3) * 61.0, l / s, t);
-                if (all(l < box) && all(l >= 0.0)) hit = m * ((any(l < s) || any(l >= box - s)) ? 0.75 : 1.0);
-                else
-                {
-                    float kmin = max(max(l.x - box.x, -l.y / 0.6), 0.0);
-                    float kmax = min(min(l.x, (box.y - l.y) / 0.6), e);
-                    if (kmin <= kmax) hit = m * (l.y < 0.0 ? 1.25 : 0.55);
-                }
-            }
-            if (hit.x >= 0.0) { bestZ = z; best = lerp(float3(0.01, 0.02, 0.04), hit, light); }
+            float2 gk = floor((c - pos) / (SAND_GRAIN * s));                 // grains travel with their puff
+            if (hash2(gk + n * 0.37) > 0.95 * (1.0 - 0.7 * (dd / pr) * (dd / pr))) continue;   // thick in the middle, thinning at the edge
+            float3 grain = age < BOTTLE_MATTER ? lerp(BOTTLE_DIGITS, float3(1, 1, 1), hash2(gk + 1.0) * 0.5) : sandColour(hash2(gk + n));
+            bestZ = z;
+            best  = lerp(float3(0.01, 0.02, 0.04), grain, lerp(0.45, 1.1, z));
         }
         col = best;
     }
