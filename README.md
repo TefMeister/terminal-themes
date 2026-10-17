@@ -170,6 +170,12 @@ fill half the window. Lightning keeps striking for as long as it stays: three bi
 first, then more at uneven times, with small bolts flashing far off. Each flash swells, flickers and
 fades, and shows the zombies in full.
 
+The whole night is one endless loop of seven and a half minutes, holding all ten of the ghost's
+visits: the zombies keep wandering, the hut keeps brewing, and everything repeats exactly. The loop
+joins in the quiet stretch halfway between the last visit's flight and the first visit's darkening
+sky, so a recording of one loop runs on into itself without a jump. `LOOP_SECONDS` at the top of
+`halloween.hlsl` sets the length, and `0` lets the night run freely instead.
+
 ![The Halloween style, moving](preview/halloween.gif)
 
 The clip is shortened to 30 seconds, so the ghost leaves sooner than it does in the terminal.
