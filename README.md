@@ -61,8 +61,9 @@ makes every movement repeat on the dot, so the clip joins up without a seam.
 ### [`frequency`](styles/frequency/)
 
 **New, still being tuned.** A background that keeps changing station, as if someone were spinning a
-radio dial, in very fine pixel art. It plays two stations, about two and a half minutes in all, then
-glitches back to its very first frame and starts again. The changes between scenes are long and
+radio dial, in very fine pixel art. It plays two stations, about two and a half minutes in all,
+ending and starting on the same colourful glitch, so one loop recorded as a video joins up without a
+seam. The changes between scenes are long and
 soft: a band of static rises up the screen, the old picture rolling away above it and the new one
 already playing below, the two dissolving into each other inside it.
 
@@ -77,6 +78,9 @@ already playing below, the two dissolving into each other inside it.
 3. The picture cracks into glowing boxes that crumble and fall away, showing a brighter world
    underneath: a striped sunrise with pyramids on the horizon, over a glassy grid floor with a finer
    grid between its lines, light running along them and the sun's reflection shimmering in it.
+   The sunrise never sits still: one glitch after another swells up and fades into the next (rows
+   sliding, pixelating, rippling, mirrored bands, the picture rolling, colours splitting apart,
+   colours cycling, blocks swapping places).
 4. It glitches and swaps to polka dots humming on unstable electricity: brown-outs, surges that spit
    sparks, pulses of current running through them and a dark hum bar rolling up.
 5. Another swap, to an old wooden TV on a papered wall, showing a black-and-white 1930s cartoon: a dog
@@ -102,10 +106,10 @@ already playing below, the two dissolving into each other inside it.
    more broken than the last. Then the camera dives into the hole, into a tube of pixelated big
    bangs going off the moment it reaches the hole, one after another, which opens onto the next scene.
 8. A huge digital bottle travels in an arc over the top of the screen from left to right, tipped
-   over and pouring out numbers and letters, shrinking until it is gone. The letters are caught by
-   a slowly turning swirl, on the same arms as the hypnotic swirl that comes later, and ride its
-   arms inward as they turn into solid cubes, near ones big and bright, far ones small and dim.
-   The arms fill up with cubes until they cover the window, then dissolve block by block into the
+   over and pouring out fine digital sand, green digits at first and every colour a moment later,
+   shrinking until it is gone. The sand pours over a slowly turning swirl, on the same arms as the
+   hypnotic swirl that comes later, and fans out along its arms as it rides them inward. The arms
+   fill up with coloured sand until they cover the window, then dissolve block by block into the
    tunnel.
 9. Those elements form a tunnel that slowly collapses in on itself as time warps, tiles crumbling away
    onto a second tunnel twisting the other way, while a hypnotic, colour-changing swirl spreads
@@ -118,8 +122,12 @@ already playing below, the two dissolving into each other inside it.
     guffawing, giggling, laughing like a maniac, or a trembling smile. Last of all a mouth appears
     small and far back in the middle, and grows until it swallows the scene, and the picture dives
     down its throat.
-13. A long stretch of grey TV static, which slowly clears onto an endless ocean of numbers and letters, many of them made up, under a night city built
-    of letters, with a square moon. Then it glitches back to the fish bones.
+13. A long stretch of grey TV static that sways from side to side, a strip sweeping across it from
+    left to right, while under it the throat crossfades into an endless ocean of numbers and letters,
+    many of them made up, under a night city built of letters, with a square moon. The ocean heaves
+    like water, its waves growing bigger and bigger until they fade into a colourful glitch. That
+    glitch is where the loop ends, and the next loop starts on the same glitch, morphing into the
+    fish bones.
 
 All through the second station, small things are off: a moment replays itself now and then, a seam
 runs down the picture, patches show coarse as if they had not finished loading, a building fails to

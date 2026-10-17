@@ -39,6 +39,10 @@ static const float3 CITY_SEA       = float3(0.10, 0.60, 0.70);
 static const float3 CITY_LIGHTS    = float3(1.00, 0.75, 0.30);
 static const float3 CITY_SKY_TOP   = float3(0.01, 0.01, 0.06);
 static const float3 CITY_SKY_LOW   = float3(0.14, 0.05, 0.20);
+static const float  WAVE_CALM      = 0.08;   // how high the ocean's waves are at first, against the eye height...
+static const float  WAVE_SWELL     = 0.32;   // ...and how much higher they have grown by the time the glitch takes over
+static const float  WAVE_GROW_SEC  = 8.0;    // the waves grow over this many seconds, up to the middle of the join
+static const float  WAVE_LIGHT     = 3.0;    // how strongly a wave's near slope is lit and its far slope shaded
 
 float3 pcScene(float2 c, float2 grid, float t)
 {
@@ -145,7 +149,7 @@ float3 facesScene(float2 c, float2 grid, float tf)
     float  lipsFrom   = EYES_SEC;
     float  throatFrom = EYES_SEC + LIPS_SEC;
     float  others     = 1.0 - saturate((tf - throatFrom) / (THROAT_SEC * 0.5));
-    float  end        = 1.0 - smoothstep(throatFrom + THROAT_SEC * 0.85, throatFrom + THROAT_SEC, tf);
+    float  end        = 1.0;                       // no fade to black: the grey static takes over from the throat
     float3 col = float3(0, 0, 0);
 
     // the middle mouth: appears last, small and far back, and grows until it swallows everything
@@ -179,12 +183,13 @@ float3 facesScene(float2 c, float2 grid, float tf)
         float id    = i * 13.1 + 1.0;
         float2 pos  = (float2(hash(id + 0.1), hash(id + 0.3)) * 1.1 - 0.05) * grid + float2(sin(tf * 0.3 + id), cos(tf * 0.23 + id)) * size * 0.1;
         float2 q    = (c - pos) / size;
-        if (abs(q.x) > 0.6 || abs(q.y) > 0.5) continue;
+        if (abs(q.x) > 0.85 || abs(q.y) > 2.0) continue;                 // the widest a glitch below can stretch or shift it
+        float swap  = lipsFrom + LIPS_SEC * FACE_SWAP * hash(id + 0.9);
+        float gw    = (tf - swap) / FACE_GLITCH_SEC;
+        if ((gw <= -0.5 || gw >= 1.0) && (abs(q.x) > 0.6 || abs(q.y) > 0.5)) continue;   // not glitching: its own box is enough
         float appear = EYES_SEC * EYE_FILL * hash(id + 0.7);
         if (tf < appear) continue;
-        float swap  = lipsFrom + LIPS_SEC * FACE_SWAP * hash(id + 0.9);
         bool  mouth = tf >= swap;
-        float gw    = (tf - swap) / FACE_GLITCH_SEC;
         bool  invert = false;
         float3 tint = float3(1, 1, 1);
         if (gw > -0.5 && gw < 1.0)
@@ -200,6 +205,7 @@ float3 facesScene(float2 c, float2 grid, float tf)
             if (style == 3) { q.y /= 1.0 + 3.0 * b; q.x *= 1.0 + 0.6 * b; mouth = gw > 0.5; }                              // stretch
             if (style == 4) { mouth = gw > 0.5; tint = lerp(float3(1, 1, 1), hue(hash(tick + id)) * 1.6, b); }             // colours
         }
+        if (abs(q.x) > 0.6 || abs(q.y) > 0.5) continue;                  // the real box, checked after the glitch so nothing is cut off
         float4 r = mouth ? lipsAt((floor(q * MOUTH_PIXELS) + 0.5) / MOUTH_PIXELS, id, tf, 0.0)
                          : eyeAt(q, id, tf, saturate((tf - appear) / EYE_OPEN_SEC));
         if (r.a > 0.0)
@@ -234,6 +240,12 @@ float3 skyline(float2 c, float2 grid, float hy, float t, out float lit)
     return col;
 }
 
+// the height of the ocean at a point, -1..1, before it is scaled by how big the waves are now
+float waveHeight(float wx, float wz, float t)
+{
+    return 0.55 * sin(wz * 1.5 - t * 2.2) + 0.3 * sin(wz * 0.8 + wx * 0.9 - t * 1.4) + 0.15 * sin(wx * 2.3 + wz * 0.5 + t * 3.1);
+}
+
 float3 cityScene(float2 c, float2 grid, float t)
 {
     float s  = gBase;
@@ -251,10 +263,21 @@ float3 cityScene(float2 c, float2 grid, float t)
         if (b.x >= 0.0) col = b;
         return col;
     }
-    // the ocean of letters, in perspective, rolling towards you
-    float dyf = max(c.y - hy, 0.5);
-    float z   = (grid.y - hy) / dyf;
-    float v2  = saturate(dyf / (grid.y - hy));
+    // the ocean of letters, in perspective, rolling towards you and heaving like water: its surface rises
+    // and falls, so crests stand up on the screen and troughs sink, the slope facing you lit and the slope
+    // behind in shade. The waves grow and grow over the city's last seconds, into the join
+    float focal = grid.y - hy;
+    float swell = WAVE_CALM + WAVE_SWELL * pow(saturate((t - (CITY_SEC + JOIN_OUT * 0.5 - WAVE_GROW_SEC)) / WAVE_GROW_SEC), 1.5);
+    float yy = c.y - hy, z = focal / max(yy, 0.5), h = 0.0;
+    [unroll] for (int it = 0; it < 3; it++)                                                  // find the water this row looks at
+    {
+        h  = waveHeight((c.x - grid.x * 0.5) * z / grid.y * 2.0, z + t * CITY_FLOW, t);
+        z  = focal / max(yy + focal * swell * h / z, 0.5);
+    }
+    float hAhead = waveHeight((c.x - grid.x * 0.5) * z / grid.y * 2.0, z + 0.35 + t * CITY_FLOW, t);
+    float light = saturate(0.55 + (h - hAhead) * WAVE_LIGHT);                                 // facing us: bright; falling away: dark
+    float dyf = focal / z;
+    float v2  = saturate(dyf / focal);
     float px  = z / grid.y * 2.0;
     float wx  = (c.x - grid.x * 0.5) * px;
     float wz  = z + t * CITY_FLOW;
@@ -267,7 +290,9 @@ float3 cityScene(float2 c, float2 grid, float t)
     if (px * 6.0 > CITY_TILE.x) on = 0.3;                                                    // too far to read: a shimmer
     else on = glyphPixel(hash2(float2(col, row) + floor(t * (1.0 + hash(col)))) * GLYPH_COUNT, f * float2(GLYPH_W, GLYPH_H));
     float3 sea = CITY_SEA * on * (0.35 + 0.75 * wave) + float3(0.0, 0.02, 0.05);
+    sea *= 0.45 + 1.0 * light;
+    if (light > 0.8 && h > 0.55 && swell > 0.08 && hash2(floor(c / (2.0 * s)) + floor(t * 8.0)) > 0.6) sea = lerp(sea, float3(0.8, 0.95, 1.0), 0.5);   // foam on the crests
     skyline(float2(c.x, hy - 1.0), grid, hy, t, lit);                                         // city lights reflected
-    if (lit > 0.5 && on > 0.2 && hash(row + col * 0.1) > 0.5) sea = lerp(sea, CITY_LIGHTS, 0.5 * (1.0 - v2));
+    if (lit > 0.5 && on > 0.2 && hash(row + col * 0.1) > 0.5) sea = lerp(sea, CITY_LIGHTS, 0.5 * (1.0 - v2) * light);
     return lerp(sea, CITY_SKY_LOW, pow(saturate(z / 30.0), 1.5) * 0.9);
 }

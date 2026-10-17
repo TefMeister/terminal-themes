@@ -7,11 +7,13 @@
 //   a heavy glitch tears it apart, it zooms into a distant pattern, flies into a gridded
 //   asteroid field of wildly coloured, glitching cubes and pans around -> (radio swap) ->
 //   the second station, where nothing is quite right: black holes tear apart three suburbs ->
-//   a digital bottle pours letters that grow into earth, water and fire -> a tunnel of them
+//   a digital bottle pours fine coloured sand over a turning swirl -> a tunnel of elements
 //   collapses as time warps, a hypnotic swirl spreading out of it -> glitch to black, old green
 //   computer lines -> eyes opening one by one until the window is full -> laughing lips ->
-//   down the last one's throat -> an ocean of made-up letters under a night city of letters ->
-//   (glitch, radio swap) -> the fish bones again.
+//   down the last one's throat -> swaying grey static, the throat crossfading into an ocean of
+//   made-up letters under a night city of letters -> its waves grow and grow and fade into a
+//   colourful glitch, where the loop ends; the next one starts on that same glitch, morphing into
+//   the fish bones again, so a recording of one loop joins without a seam.
 // On top of that, random glitches in psychedelic colours come and go at random times.
 // The scenes are in frequency-scenes.hlsli, frequency-tv.hlsli, frequency-space.hlsli,
 // frequency-dream.hlsli and frequency-eyes.hlsli, which must stay next to this file. Sprites come from frequency-sheet.png (drawn by frequency-sprites.py;
@@ -86,6 +88,27 @@ static const float  BLACKOUT_SEC    = 2.0;   // the swirl glitching away to blac
 static const float  PC_LINGER       = 2.5;   // the green computer lines linger this long among the first eyes
 static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
 static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-many seconds
+static const float  STATIC_OPACITY  = 0.70;  // how thick the static is: the throat and then the city show faintly through it
+static const float  STATIC_XFADE    = 0.6;   // seconds in, the throat starts crossfading into the city under the static
+static const float  STATIC_SWAY     = 0.06;  // the static sways from side to side this far, share of the width...
+static const float  STATIC_SWAY_HZ  = 0.35;  // ...this many times a second...
+static const float  STATIC_BEND     = 0.015; // ...bending a little down its height as it goes
+static const float  STATIC_GRAIN_HZ = 3.0;   // the static's grain changes this often, so the sway can be seen
+static const float  STRIP_SEC       = 1.6;   // a strip sweeps from left to right across the static this often
+static const float  STRIP_W         = 0.07;  // its half-width, share of the width
+static const float  STRIP_CLEAR     = 0.6;   // how much clearer the pictures show inside it
+
+// --- the loop's join: the city's waves fade into a colourful glitch, which is where the loop ends; the
+// next loop starts on the very same glitch, morphing into the fish, so a recording joins without a seam ---
+static const float  JOIN_OUT        = 2.5;   // seconds of the city fading into the glitch, at the end of the loop
+static const float  JOIN_IN         = 2.5;   // seconds of the glitch morphing into the fish, at the start
+static const float  JOIN_BLOCK      = 6.0;   // the glitch breaks up in blocks this many cells across
+static const float  JOIN_RATE       = 12.0;  // it changes this many times a second
+
+// --- the sunrise keeps glitching, a different way each time ---
+static const float  SUN_FX_SEC      = 0.9;   // each glitch effect lasts this long, swelling and fading into the next
+static const int    SUN_FX_KINDS    = 8;
+static const float  SUN_FX_STRENGTH = 0.8;
 
 // --- thin glitch lines, all the way through ---
 static const float  LINE_RATE       = 12.0;  // the glitch blocks change this many times a second
@@ -134,7 +157,7 @@ static const float  E_EYES   = E_PC + EYES_SEC;
 static const float  E_LIPS   = E_EYES + LIPS_SEC;
 static const float  E_THROAT = E_LIPS + THROAT_SEC;
 static const float  E_CITY   = E_THROAT + CITY_SEC;
-static const float  LOOP_SEC = E_CITY + RF_SEC;
+static const float  LOOP_SEC = E_CITY + JOIN_OUT;
 
 // scene numbers
 static const int    S_FISH = 0, S_SKULL = 1, S_CRUMBLE = 2, S_BRIGHT = 3, S_POLKA = 4, S_TV = 5, S_ZOOM = 6, S_SPACE = 7, S_BLANK = 8,
@@ -254,6 +277,24 @@ float3 glitchColour(float3 col, float2 c, float g, float seed)
     return lerp(orig, col, saturate(g * 1.6));
 }
 
+// the colourful glitch the loop ends and begins on: bands of rows sliding sideways, full of blocks of
+// wild colour, contour rainbows and bright streaks, changing many times a second
+float3 joinGlitch(float2 c, float2 grid, float tl)
+{
+    float tick  = floor(tl * JOIN_RATE);
+    float bandH = floor(lerp(3.0, 24.0, hash(floor(c.y / 24.0) + tick * 0.37)));
+    float band  = floor(c.y / bandH);
+    float x     = c.x + floor((hash2(float2(band, tick)) - 0.5) * grid.x * 0.6);
+    float bw    = floor(lerp(4.0, 40.0, hash2(float2(band, tick + 2.0)))) * gBase;
+    float2 bk   = float2(floor(x / bw), band);
+    float  h    = hash2(bk + tick * 0.13);
+    float3 col  = hue(frac(h + tl * 0.2)) * (0.5 + 0.6 * hash2(bk + 9.0));
+    if (h > 0.7) col = frac(float3(x, c.y, x + c.y) * 0.02 + tl * 0.5);                   // contour rainbows
+    if (h < 0.08) col = float3(0, 0, 0);                                                  // holes
+    if (hash2(float2(c.y, tick * 0.7)) < 0.03) col = float3(1, 1, 1) * 1.2;               // bright streak lines
+    return col;
+}
+
 // --- text ---
 bool isMarker(float3 c) { return all(abs(c - MARKER) < 0.5 / 255.0); }
 float ink(float3 c) { return saturate(max(c.r, max(c.g, c.b))); }
@@ -310,8 +351,13 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_EYES)   { id = S_EYES; t = tl - E_PC; }
     else if (tl < E_LIPS)   { id = S_LIPS; t = tl - E_EYES; }
     else if (tl < E_THROAT) { id = S_THROAT; t = tl - E_LIPS; }
-    else if (tl < E_CITY)   { id = S_CITY; t = tl - E_THROAT; }
-    else                    { id = S_CITY; t = tl - E_THROAT; idB = S_FISH; tB = 0.0; rf = (tl - E_CITY) / RF_SEC; rfHeavy = 0.5; }
+    else                    { id = S_CITY; t = tl - E_THROAT; }      // runs on past E_CITY into the join
+
+    // the join round the end of the loop: 1 right at the loop's end and start, 0 outside the join
+    float join = 0.0;
+    if (tl > E_CITY)  join = smoothstep(0.0, 1.0, (tl - E_CITY) / JOIN_OUT);
+    if (tl < JOIN_IN) join = 1.0 - smoothstep(0.0, 1.0, tl / JOIN_IN);
+    bool sunrise = id == S_BRIGHT;
 
     // glitch strength now: the random kind outside the planned changes, the planned kind inside them
     float seed;
@@ -323,6 +369,11 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         g = max(forced, rf >= 0.0 ? rfHeavy * bell(rf) : 0.0);
         if (tear >= 0.0) g = 0.4 + 0.5 * tear;
         g *= 0.4 + 0.6 * hash(seed * 0.71);
+    }
+    if (join > 0.0)
+    {
+        seed = floor(tl * JOIN_RATE) + 501.0;                       // counted on the loop's own clock, so both ends match
+        g = join * (0.6 + 0.4 * hash(seed * 0.71));
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
 
@@ -410,12 +461,63 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         else cc.y += floor(roll * RF_ROLL);
     }
 
+    // the sunrise never sits still: one glitch effect after another swells up and fades into the next
+    int   sunFx = -1;
+    float sunK  = 0.0;
+    float sunTick = floor(T * 12.0);
+    [branch] if (sunrise && id == S_BRIGHT)
+    {
+        float slot = floor(t / SUN_FX_SEC);
+        sunFx = (int)wrap(slot * 3.0, (float)SUN_FX_KINDS);          // steps through every kind before repeating
+        sunK  = bell(frac(t / SUN_FX_SEC)) * SUN_FX_STRENGTH;
+        if (sunFx == 0)                                              // bands of rows slide sideways
+        {
+            float band = floor(c.y / floor(lerp(3.0, 18.0, hash(sunTick * 0.3))));
+            cc.x += floor((hash2(float2(band, sunTick)) - 0.5) * grid.x * 0.25 * sunK);
+        }
+        else if (sunFx == 1) { float p = 1.0 + floor(sunK * 10.0); cc = floor(cc / p) * p; }                    // pixelates
+        else if (sunFx == 2) cc.x += floor(sin(cc.y * 0.15 + T * 18.0) * 10.0 * sunK);                         // ripples
+        else if (sunFx == 3 && hash2(float2(floor(c.y / 12.0), sunTick)) < sunK) cc.x = grid.x - 1.0 - cc.x;   // mirrored bands
+        else if (sunFx == 4) cc.y = wrap(cc.y + floor(hash(sunTick) * grid.y * 0.3 * sunK), grid.y);          // the picture rolls
+        else if (sunFx == 7)                                                                                    // blocks swap places
+        {
+            float2 bk = floor(cc / 16.0);
+            if (hash2(bk + sunTick) < sunK * 0.6) cc += (floor(float2(hash2(bk + 1.0 + sunTick), hash2(bk - 1.0)) * 5.0) - 2.0) * 16.0;
+        }
+    }
+
+    // the grey static between the throat and the city sways from side to side, and the pictures under it
+    // sway with it: the throat still rushing past, crossfading into the city
+    float  statK = 0.0, sway = 0.0, xfade = 1.0;
+    float3 throatImg = float3(0, 0, 0);
+    [branch] if (id == S_CITY && t < CITY_STATIC)
+    {
+        statK = 1.0 - smoothstep(CITY_STATIC - CITY_CLEAR, CITY_STATIC, t);
+        sway  = floor(sin(T * TAU * STATIC_SWAY_HZ) * grid.x * STATIC_SWAY + sin(c.y * 0.02 + T * 1.7) * grid.x * STATIC_BEND);
+        cc.x += floor(sway * statK);
+        xfade = smoothstep(STATIC_XFADE, CITY_STATIC - CITY_CLEAR * 0.5, t);
+        [branch] if (xfade < 1.0) throatImg = facesScene(cc, grid, EYES_SEC + LIPS_SEC + THROAT_SEC + t * 0.6);
+    }
+
     // the zoom gives way to the cubes cell by cell, in a dither, so only one picture is drawn
     if (zoomMix > 0.65 && hash2(c + floor(T * 20.0)) < smoothstep(0.65, 1.0, zoomMix)) { id = S_SPACE; t = tl - E_ZOOM; cc = c; }
     float3 col = sceneColour(id, cc, grid, t);
+    [branch] if (sunFx == 5 && id == S_BRIGHT)                                                                           // colours split apart
+    {
+        float2 off = float2(floor(6.0 * sunK) + 1.0, 0.0);
+        col.r = brightWorld(cc + off, grid, t).r;
+        col.b = brightWorld(cc - off, grid, t).b;
+    }
+    if (sunFx == 6 && id == S_BRIGHT) col = lerp(col, floor(saturate(hueRotate(col, sunK * TAU * frac(T * 0.7)) * 1.3) * 4.0) / 3.0, sunK);   // colour cycling
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
     if (gline) col = lerp(col * 1.2, hue(hash2(float2(lrow, lslot + 2.0))), 0.2);
+    [branch] if (join > 0.0)
+    {
+        // block by block the picture gives way to the colourful glitch; right at the join it is all glitch
+        float2 jb = floor(c / (JOIN_BLOCK * gBase));
+        if (hash2(jb + 0.25) < smoothstep(0.35, 1.0, join)) col = joinGlitch(c, grid, tl);
+    }
     if (bang >= 0.0)
     {
         float tb = t;
@@ -436,15 +538,30 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         }
     }
 
-    // between the throat and the city: a long stretch of grey static that slowly clears
-    if (id == S_CITY && t < CITY_STATIC)
+    // between the throat and the city: a long stretch of grey static that slowly clears. It sways from side
+    // to side, a strip sweeps across it from left to right, and through it the throat crossfades into the city
+    [branch] if (id == S_CITY && t < CITY_STATIC)
     {
-        float n  = hash3(float3(c, floor(T * 30.0))).x;
-        float gr = 0.25 + 0.6 * n;
-        gr *= 0.85 + 0.15 * sin(c.y * 0.05 - T * 6.0);                           // a soft rolling band
-        if (hash2(float2(floor(c.y / 3.0), floor(T * 15.0))) < 0.02) gr = 0.9;   // bright tear lines
-        float strength = (1.0 - smoothstep(CITY_STATIC - CITY_CLEAR, CITY_STATIC, t)) * smoothstep(0.0, 0.4, t);
-        col = lerp(col * smoothstep(CITY_STATIC - CITY_CLEAR - 0.5, CITY_STATIC, t), float3(gr, gr, gr), strength);
+        float3 img = lerp(throatImg, col, xfade);
+        float2 sp  = float2(c.x + sway, c.y);
+        float2 gk  = floor(sp / gBase);
+        float  gs  = T * STATIC_GRAIN_HZ;
+        float  n   = lerp(hash2(gk + floor(gs) * 0.71), hash2(gk + (floor(gs) + 1.0) * 0.71), frac(gs));   // a slow grain that moves with the sway
+        float  gr  = 0.18 + 0.45 * n + 0.25 * hash3(float3(c, floor(T * 30.0))).x;                       // with a fine fast sparkle on top
+        gr *= 0.82 + 0.18 * sin(sp.x * 0.05);                                                            // soft upright bands, swaying
+        gr *= 0.85 + 0.15 * sin(c.y * 0.05 - T * 6.0);                                                   // a soft rolling band
+        if (hash2(float2(floor(c.y / 3.0), floor(T * 15.0))) < 0.02) gr = 0.9;                           // bright tear lines
+        // the strip sweeping from left to right: streaky, brighter at its edges, the pictures clearer inside it
+        float sx = wrap(T / STRIP_SEC, 1.0) * grid.x * (1.0 + 4.0 * STRIP_W) - grid.x * 2.0 * STRIP_W;
+        float su = (c.x - sx) / (grid.x * STRIP_W);
+        float sb = abs(su) < 1.0 ? bell(su * 0.5 + 0.5) : 0.0;
+        if (sb > 0.0)
+        {
+            gr = lerp(gr, 0.3 + 0.6 * hash2(float2(floor(c.x / (12.0 * gBase)), floor(c.y / gBase) + floor(T * 20.0))), sb);
+            if (abs(abs(su) - 0.95) < 0.05) gr = 0.95;
+        }
+        float strength = statK * smoothstep(0.0, 0.5, t) * STATIC_OPACITY * (1.0 - STRIP_CLEAR * sb);
+        col = lerp(img, float3(gr, gr, gr), strength);
     }
     // everything glitches to black: bands of rows go out, more and more of them
     if (blackout > 0.0 && hash2(float2(floor(c.y / 4.0), floor(T * 15.0))) < blackout * 1.2) col = float3(0, 0, 0);
