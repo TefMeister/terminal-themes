@@ -20,6 +20,8 @@ static const float  TOON_DOG_SHARE = 0.34;   // dog height as a share of the pic
 static const float  TOON_IRIS_SEC  = 0.9;    // the iris opening at the start
 static const float  TOON_SPLIT_AT  = 3.5;    // seconds in, the dog glitches into himself and a mirror image
 static const float  TOON_SPLIT_SEC = 0.8;    // how long the split glitches
+static const float  TOON_PART_SEC  = 1.4;    // how long the two take to walk apart out of one, and back into one
+static const float  TOON_MERGE_AT  = 7.6;    // seconds in, they start walking back together; the right-hand dog carries on
 static const float  TOON_SEP_MIN   = 0.04;   // the two dogs' distance from the middle, share of the picture...
 static const float  TOON_SEP_MAX   = 0.22;   // ...swinging between these
 static const float  TOON_SEP_RATE  = 0.9;    // how quickly they drift together and apart
@@ -94,19 +96,23 @@ float3 cartoon(float2 p, float2 size, float t)
         }
         if (p.y > ground + 3.0 * sc && wrap(wx, 23.0 * sc) < sc && hash(floor(wx / (23.0 * sc))) > 0.4 && p.y < ground + 6.0 * sc) col = INK;
     }
-    // the dog, and his shadow. Partway in he glitches into two: himself and his mirror image,
-    // copying each other step for step, drifting closer together and further apart
+    // the dog, and his shadow. Partway in he glitches and walks apart into two: himself and his mirror
+    // image, copying each other step for step, drifting closer together and further apart. Later they
+    // walk back into one, and it is the mirror image, the one on the right, that carries on
     {
         float dogX  = size.x * 0.38 + sin(ts * 0.45) * size.x * 0.07;   // the camera keeps up, a little loosely
-        float split = saturate((t - TOON_SPLIT_AT) / TOON_SPLIT_SEC);
-        bool  glitch = t > TOON_SPLIT_AT && t < TOON_SPLIT_AT + TOON_SPLIT_SEC;
+        float split = smoothstep(0.0, 1.0, (t - TOON_SPLIT_AT) / TOON_PART_SEC);
+        float merge = smoothstep(0.0, 1.0, (t - TOON_MERGE_AT) / TOON_PART_SEC);
+        float mEnd  = TOON_MERGE_AT + TOON_PART_SEC;
+        bool  glitch = (t > TOON_SPLIT_AT && t < TOON_SPLIT_AT + TOON_SPLIT_SEC) || (t > mEnd - 0.5 && t < mEnd + 0.3);
         float mid   = lerp(dogX, size.x * 0.5, split);
-        float sep   = split * size.x * (TOON_SEP_MIN + (TOON_SEP_MAX - TOON_SEP_MIN) * (0.5 + 0.5 * sin(ts * TOON_SEP_RATE)));
+        float sep   = split * (1.0 - merge) * size.x * (TOON_SEP_MIN + (TOON_SEP_MAX - TOON_SEP_MIN) * (0.5 + 0.5 * sin(ts * TOON_SEP_RATE)));
+        int   first = t > mEnd ? 1 : 0;                                    // after the merge only the right-hand dog is left
         int   dogs  = t > TOON_SPLIT_AT ? 2 : 1;
-        if (glitch && hash(tick * 2.3) < 0.4) dogs = 1;                    // the split stutters in
+        if (glitch && hash(tick * 2.3) < 0.4) { if (t < mEnd) dogs = 1; else first = 0; }   // the split and the merge stutter
         float slice = glitch ? floor((hash(floor(p.y / (4.0 * sc)) + tick) - 0.5) * 10.0) * sc : 0.0;
         int   frame = (int)wrap(tick, DOG_FRAMES);
-        [loop] for (int k = 0; k < dogs; k++)
+        [loop] for (int k = first; k < dogs; k++)
         {
             float x = dogs == 1 ? mid : mid + (k == 0 ? -sep : sep);
             float2 org = float2(floor(x - DOG_S * 0.5 * sc), ground + 4.0 * sc - DOG_S * sc);

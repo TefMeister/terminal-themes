@@ -20,6 +20,9 @@ static const float  EYE_OPEN_SEC   = 0.25;
 static const float  FACE_SWAP      = 0.6;    // share of LIPS_SEC over which the eyes glitch into mouths
 static const float  FACE_GLITCH_SEC = 0.45;  // how long each one's glitch lasts
 static const float  MOUTH_LAST_AT  = 0.65;   // share of LIPS_SEC when the middle mouth appears
+static const float  VANISH_FROM    = 0.6;    // seconds after the middle mouth appears, the other mouths start glitching out of existence...
+static const float  VANISH_BY      = 0.55;   // ...the last one gone by this share of THROAT_SEC
+static const float  VANISH_SEC     = 0.6;    // how long each one takes to glitch away
 static const float  MOUTH_START    = 0.05;   // its first size, share of the window height
 static const float  MOUTH_GROW     = 0.8;    // how fast it grows (it doubles about every 0.9 s)
 static const float  MOUTH_PIXELS   = 18.0;   // a mouth is this many big pixels across, whatever its size
@@ -39,6 +42,23 @@ static const float3 CITY_SEA       = float3(0.10, 0.60, 0.70);
 static const float3 CITY_LIGHTS    = float3(1.00, 0.75, 0.30);
 static const float3 CITY_SKY_TOP   = float3(0.01, 0.01, 0.06);
 static const float3 CITY_SKY_LOW   = float3(0.14, 0.05, 0.20);
+static const float3 DAWN_SKY_TOP   = float3(0.22, 0.16, 0.42);
+static const float3 DAWN_SKY_LOW   = float3(1.00, 0.52, 0.32);
+static const float3 DAY_SKY_TOP    = float3(0.22, 0.50, 0.92);
+static const float3 DAY_SKY_LOW    = float3(0.72, 0.86, 1.00);
+static const float  SKY_TURN_FROM  = 3.0;    // seconds in, the sky starts turning from night to day...
+static const float  SKY_TURN_TO    = CITY_SEC + 1.5;   // ...and has turned this far by here (into the join)
+static const float  SKY_TURN       = 1.75;   // radians the whole sky turns round a point below the horizon
+static const float  SKY_PIVOT      = 0.15;   // that point, share of the height below the horizon
+static const float  SKY_RADIUS     = 0.50;   // how far the moon and the sun are from it, share of the height
+static const float  MOON_AT        = 0.30;   // the moon starts this far right of the top, radians...
+static const float  SUN_AT         = -1.85;  // ...and the sun this far left, below the horizon
+static const float  MOON_R         = 8.0;    // the moon's radius, cells at the smallest size
+static const float  SUN_R          = 11.0;
+static const float  STAR_CELL      = 7.0;    // the stars sit on a turning grid this many cells across...
+static const float  STAR_SHARE     = 0.05;   // ...this share of whose squares hold one: sparse
+
+static float gDay;                           // how far into the day the city is, 0..1, set by cityScene
 static const float  WAVE_CALM      = 0.08;   // how high the ocean's waves are at first, against the eye height...
 static const float  WAVE_SWELL     = 0.32;   // ...and how much higher they have grown by the time the glitch takes over
 static const float  WAVE_GROW_SEC  = 8.0;    // the waves grow over this many seconds, up to the middle of the join
@@ -80,7 +100,6 @@ float4 eyeAt(float2 q, float id, float t, float open)
     if (e > 0.03) return float4(0, 0, 0, 0);
     if (e > 0.0) return float4(0.12, 0.04, 0.04, 1);                                          // lid line
     float3 col = float3(0.93, 0.91, 0.86) * (1.0 - 1.2 * q.x * q.x);
-    if (ax > 0.18 && abs(sin(q.x * 40.0 + sin(q.y * 30.0 + id) * 2.0)) < 0.07) col = float3(0.80, 0.25, 0.25);   // veins
     // the iris looks somewhere new every so often, each eye on its own
     float  look = floor((t + hash(id) * 3.0) / (0.5 + hash(id + 5.0) * 1.5));
     float  ang  = hash(id + look * 1.3) * TAU;
@@ -148,7 +167,6 @@ float3 facesScene(float2 c, float2 grid, float tf)
 {
     float  lipsFrom   = EYES_SEC;
     float  throatFrom = EYES_SEC + LIPS_SEC;
-    float  others     = 1.0 - saturate((tf - throatFrom) / (THROAT_SEC * 0.5));
     float  end        = 1.0;                       // no fade to black: the grey static takes over from the throat
     float3 col = float3(0, 0, 0);
 
@@ -172,21 +190,25 @@ float3 facesScene(float2 c, float2 grid, float tf)
         }
         if (r.a > 0.0) col = r.rgb * lerp(FACE_FAR_DIM, 1.0, saturate(gt / 2.0));
         if (front && r.a > 0.0) return col * end;
-        if (front) others = min(others, 0.4);
     }
 
-    // the others, back to front: eyes opening one by one, then each glitching into a mouth
+    // the others, back to front: eyes opening one by one, then each glitching into a mouth, and at the
+    // end each mouth glitching out of existence in a way of its own
+    float vanishFrom = mAt + VANISH_FROM;
+    float vanishTo   = throatFrom + THROAT_SEC * VANISH_BY - VANISH_SEC;
     [loop] for (int i = 0; i < FACE_COUNT; i++)
     {
         float depth = (i + 0.5) / FACE_COUNT;
         float size  = lerp(FACE_MIN, FACE_MAX, depth * depth) * grid.y;
         float id    = i * 13.1 + 1.0;
+        float vw    = (tf - lerp(vanishFrom, vanishTo, hash(id + 1.7))) / VANISH_SEC;
+        if (vw >= 1.0) continue;                                         // glitched away
         float2 pos  = (float2(hash(id + 0.1), hash(id + 0.3)) * 1.1 - 0.05) * grid + float2(sin(tf * 0.3 + id), cos(tf * 0.23 + id)) * size * 0.1;
         float2 q    = (c - pos) / size;
-        if (abs(q.x) > 0.85 || abs(q.y) > 2.0) continue;                 // the widest a glitch below can stretch or shift it
+        if (abs(q.x) > 1.0 || abs(q.y) > 2.0) continue;                  // the widest a glitch below can stretch or shift it
         float swap  = lipsFrom + LIPS_SEC * FACE_SWAP * hash(id + 0.9);
         float gw    = (tf - swap) / FACE_GLITCH_SEC;
-        if ((gw <= -0.5 || gw >= 1.0) && (abs(q.x) > 0.6 || abs(q.y) > 0.5)) continue;   // not glitching: its own box is enough
+        if ((gw <= -0.5 || gw >= 1.0) && vw <= 0.0 && (abs(q.x) > 0.6 || abs(q.y) > 0.5)) continue;   // not glitching: its own box is enough
         float appear = EYES_SEC * EYE_FILL * hash(id + 0.7);
         if (tf < appear) continue;
         bool  mouth = tf >= swap;
@@ -205,13 +227,28 @@ float3 facesScene(float2 c, float2 grid, float tf)
             if (style == 3) { q.y /= 1.0 + 3.0 * b; q.x *= 1.0 + 0.6 * b; mouth = gw > 0.5; }                              // stretch
             if (style == 4) { mouth = gw > 0.5; tint = lerp(float3(1, 1, 1), hue(hash(tick + id)) * 1.6, b); }             // colours
         }
+        if (vw > 0.0)
+        {
+            // and at the end each mouth glitches out of existence, in a way of its own
+            int   style = min(5, (int)(hash(id + 31.0) * 6.0));
+            float k     = saturate(vw);
+            float tick  = floor(tf * 24.0);
+            bool  gone  = false;
+            if (style == 0) { float sl = floor(q.y * 12.0); q.x += (hash(sl + tick + id) - 0.5) * 0.7 * k; gone = hash(sl * 1.7 + id) < k; }   // slices tear off
+            if (style == 1) { gone = hash(tick * 1.3 + id) < k * 1.1; invert = hash(tick + id * 0.7) < 0.5; }                              // flickers out
+            if (style == 2) { float n = lerp(MOUTH_PIXELS, 2.0, k); q = (floor(q * n) + 0.5) / n; gone = hash2(floor(q * n) + id) < k; }   // pixels crumble away
+            if (style == 3) { q.y /= max(1.0 - k * 1.4, 0.02); q.x /= max(1.0 - smoothstep(0.6, 1.0, k), 0.02); tint *= 1.0 + 1.5 * k; }  // an old TV switching off
+            if (style == 4) { tint = lerp(tint, hue(hash(tick + id)) * 1.6, bell(k)); gone = hash2(floor(c / (2.0 * gBase)) + id) < k; }   // colours, dissolving
+            if (style == 5) { float cl = floor(q.x * 10.0); q.x += sin(q.y * 25.0 + tf * 20.0) * 0.1 * k; q.y -= k * k * 0.5 * hash(cl + id); gone = hash(cl + id + 2.0) < k * k; }   // melts and drips
+            if (gone) continue;
+        }
         if (abs(q.x) > 0.6 || abs(q.y) > 0.5) continue;                  // the real box, checked after the glitch so nothing is cut off
         float4 r = mouth ? lipsAt((floor(q * MOUTH_PIXELS) + 0.5) / MOUTH_PIXELS, id, tf, 0.0)
                          : eyeAt(q, id, tf, saturate((tf - appear) / EYE_OPEN_SEC));
         if (r.a > 0.0)
         {
             float3 rc = invert ? 1.0 - r.rgb : r.rgb;
-            col = rc * tint * lerp(FACE_FAR_DIM, 1.0, depth) * others;
+            col = rc * tint * lerp(FACE_FAR_DIM, 1.0, depth);
         }
     }
     return col * end;
@@ -234,8 +271,9 @@ float3 skyline(float2 c, float2 grid, float hy, float t, out float lit)
     gl.y = GLYPH_H - 1.0 - gl.y;
     bool on = hash2(g + b) > 0.55;
     float px = glyphPixel(hash2(g + floor(t * 0.4 + hash(b))) * GLYPH_COUNT, gl);
-    float3 col = float3(0.03, 0.03, 0.07);
-    if (px > 0.5) col = on ? CITY_LIGHTS * (0.8 + 0.2 * sin(t * 3.0 + g.y)) : float3(0.15, 0.2, 0.35);
+    float3 col = lerp(float3(0.03, 0.03, 0.07), float3(0.26, 0.30, 0.42), gDay);              // by day the buildings show grey-blue
+    if (px > 0.5) col = on ? lerp(CITY_LIGHTS * (0.8 + 0.2 * sin(t * 3.0 + g.y)), float3(0.62, 0.66, 0.74), gDay * 0.8)
+                           : lerp(float3(0.15, 0.2, 0.35), float3(0.42, 0.47, 0.58), gDay);
     if (h > 14.0 && c.y < top + 2.0 * s && abs(wrap(x, bw) - bw * 0.5) < s && frac(t * 0.8) < 0.3) col = float3(1, 0.1, 0.1);
     return col;
 }
@@ -251,14 +289,48 @@ float3 cityScene(float2 c, float2 grid, float t)
     float s  = gBase;
     float hy = floor(grid.y * CITY_HORIZON);
     float lit;
+
+    // the sky turns round a point below the horizon, from night to day: the stars wheel over and fade, the
+    // moon sets on the right and the sun comes up on the left
+    float  turn  = SKY_TURN * smoothstep(0.0, 1.0, (t - SKY_TURN_FROM) / (SKY_TURN_TO - SKY_TURN_FROM));
+    float2 pivot = float2(grid.x * 0.5, hy + grid.y * SKY_PIVOT);
+    float  sunA  = SUN_AT + turn;
+    float2 sunP  = pivot + rot2(float2(0.0, -grid.y * SKY_RADIUS), sunA);
+    float  sunUp = (hy - sunP.y) / (grid.y * SKY_RADIUS);                                    // the sun's height over the horizon
+    gDay = smoothstep(-0.05, 0.45, sunUp);
+    float  dawn  = bell(saturate((sunUp + 0.30) / 0.75)) * (1.0 - gDay * 0.6);
+    float3 skyTop = lerp(lerp(CITY_SKY_TOP, DAWN_SKY_TOP, dawn), DAY_SKY_TOP, gDay);
+    float3 skyLow = lerp(lerp(CITY_SKY_LOW, DAWN_SKY_LOW, dawn), DAY_SKY_LOW, gDay);
     if (c.y < hy)
     {
-        float3 col = lerp(CITY_SKY_TOP, CITY_SKY_LOW, floor(c.y / hy * 6.0 + dither(c)) / 6.0);
-        float2 g = floor(c / (float2(GLYPH_W, GLYPH_H) * s));
-        if (hash2(g + 3.0) > 0.975)                                                           // letter stars
-            col += float3(0.5, 0.6, 0.9) * (0.4 + 0.4 * sin(t * 2.0 + hash2(g) * TAU)) * glyphPixel(hash2(g) * GLYPH_COUNT, (c - g * float2(GLYPH_W, GLYPH_H) * s) / s);
-        float2 mq = abs(c - float2(grid.x * 0.8, hy * 0.35));                                // the moon is a perfect square
-        if (max(mq.x, mq.y) < 9.0 * s) col = float3(0.95, 0.92, 0.75) * (hash2(floor(c / (3.0 * s))) > 0.85 ? 0.85 : 1.0);
+        float3 col = lerp(skyTop, skyLow, floor(c.y / hy * 6.0 + dither(c)) / 6.0);
+        // sparse stars on the turning sky, twinkling, fading as the day comes
+        float2 sp = rot2(c - pivot, -turn);
+        float  cs = STAR_CELL * s;
+        float2 sk = floor(sp / cs);
+        float  stars = 1.0 - smoothstep(-0.25, 0.1, sunUp);
+        if (stars > 0.0 && hash2(sk + 3.0) < STAR_SHARE)
+        {
+            float2 so = sp - (sk + 0.2 + 0.6 * float2(hash2(sk + 1.0), hash2(sk + 2.0))) * cs;
+            float  big = hash2(sk + 4.0) > 0.85 ? 1.0 : 0.0;                                    // a few bright ones, with a cross
+            float  tw  = 0.55 + 0.45 * sin(t * (1.5 + 3.0 * hash2(sk + 5.0)) + hash2(sk) * TAU);
+            float  d   = max(abs(so.x), abs(so.y)), dc = min(abs(so.x), abs(so.y));
+            if (d < 0.75 * s || (big > 0.0 && dc < 0.5 * s && d < 2.5 * s))
+                col = lerp(col, float3(0.85, 0.90, 1.00) * (d < 0.75 * s ? 1.0 : 0.6), tw * stars);
+        }
+        // the sun, low and orange, white and bright once it is up, with a glow round it
+        float  ds = length(c - sunP);
+        col += lerp(float3(1.0, 0.45, 0.2), float3(1.0, 0.9, 0.7), gDay) * 0.35 * saturate(1.0 - ds / (grid.y * 0.35)) * saturate(sunUp + 0.3);
+        if (ds < SUN_R * s) col = lerp(float3(1.0, 0.55, 0.25), float3(1.0, 0.98, 0.85), gDay) * (ds > (SUN_R - 1.0) * s ? 0.9 : 1.0);
+        // the moon, round, with a few craters, paling by day
+        float2 moonP = pivot + rot2(float2(0.0, -grid.y * SKY_RADIUS), MOON_AT + turn);
+        float2 mq    = (c - moonP) / s;
+        if (length(mq) < MOON_R)
+        {
+            float  dark = length(mq - float2(-2.5, -1.5)) < 2.2 || length(mq - float2(3.0, 2.0)) < 1.6 || length(mq - float2(0.5, 4.5)) < 1.2 ? 0.8 : 1.0;
+            float3 mc   = float3(0.95, 0.92, 0.75) * dark * (length(mq) > MOON_R - 1.0 ? 0.85 : 1.0);
+            col = lerp(mc, lerp(col, float3(1, 1, 1), 0.35), gDay * 0.6);
+        }
         float3 b = skyline(c, grid, hy, t, lit);
         if (b.x >= 0.0) col = b;
         return col;
@@ -290,9 +362,9 @@ float3 cityScene(float2 c, float2 grid, float t)
     if (px * 6.0 > CITY_TILE.x) on = 0.3;                                                    // too far to read: a shimmer
     else on = glyphPixel(hash2(float2(col, row) + floor(t * (1.0 + hash(col)))) * GLYPH_COUNT, f * float2(GLYPH_W, GLYPH_H));
     float3 sea = CITY_SEA * on * (0.35 + 0.75 * wave) + float3(0.0, 0.02, 0.05);
-    sea *= 0.45 + 1.0 * light;
+    sea *= (0.45 + 1.0 * light) * (1.0 + 0.6 * gDay);                                        // brighter as the day comes
     if (light > 0.8 && h > 0.55 && swell > 0.08 && hash2(floor(c / (2.0 * s)) + floor(t * 8.0)) > 0.6) sea = lerp(sea, float3(0.8, 0.95, 1.0), 0.5);   // foam on the crests
-    skyline(float2(c.x, hy - 1.0), grid, hy, t, lit);                                         // city lights reflected
-    if (lit > 0.5 && on > 0.2 && hash(row + col * 0.1) > 0.5) sea = lerp(sea, CITY_LIGHTS, 0.5 * (1.0 - v2) * light);
-    return lerp(sea, CITY_SKY_LOW, pow(saturate(z / 30.0), 1.5) * 0.9);
+    skyline(float2(c.x, hy - 1.0), grid, hy, t, lit);                                         // city lights reflected, by night
+    if (lit > 0.5 && on > 0.2 && hash(row + col * 0.1) > 0.5) sea = lerp(sea, CITY_LIGHTS, 0.5 * (1.0 - v2) * light * (1.0 - gDay));
+    return lerp(sea, skyLow, pow(saturate(z / 30.0), 1.5) * 0.9);
 }

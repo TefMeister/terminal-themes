@@ -11,9 +11,10 @@
 //   collapses as time warps, a hypnotic swirl spreading out of it -> glitch to black, old green
 //   computer lines -> eyes opening one by one until the window is full -> laughing lips ->
 //   down the last one's throat -> swaying grey static, the throat crossfading into an ocean of
-//   made-up letters under a night city of letters -> its waves grow and grow and fade into a
-//   colourful glitch, where the loop ends; the next one starts on that same glitch, morphing into
-//   the fish bones again, so a recording of one loop joins without a seam.
+//   made-up letters under a city of letters, the sky turning from night to day -> its waves grow
+//   and grow and rise over the window, sinking us under the sea; the loop ends with the water line
+//   halfway up, and the next one starts on that same moment, among the fish bones again, so a
+//   recording of one loop joins without a seam.
 // On top of that, random glitches in psychedelic colours come and go at random times.
 // The scenes are in frequency-scenes.hlsli, frequency-tv.hlsli, frequency-space.hlsli,
 // frequency-dream.hlsli and frequency-eyes.hlsli, which must stay next to this file. Sprites come from frequency-sheet.png (drawn by frequency-sprites.py;
@@ -98,12 +99,15 @@ static const float  STRIP_SEC       = 1.6;   // a strip sweeps from left to righ
 static const float  STRIP_W         = 0.07;  // its half-width, share of the width
 static const float  STRIP_CLEAR     = 0.6;   // how much clearer the pictures show inside it
 
-// --- the loop's join: the city's waves fade into a colourful glitch, which is where the loop ends; the
-// next loop starts on the very same glitch, morphing into the fish, so a recording joins without a seam ---
-static const float  JOIN_OUT        = 2.5;   // seconds of the city fading into the glitch, at the end of the loop
-static const float  JOIN_IN         = 2.5;   // seconds of the glitch morphing into the fish, at the start
-static const float  JOIN_BLOCK      = 6.0;   // the glitch breaks up in blocks this many cells across
-static const float  JOIN_RATE       = 12.0;  // it changes this many times a second
+// --- the loop's join: the city's growing waves rise up over the window and we sink under the sea, among
+// the fish. The water line is halfway up the window where the loop ends, and the next loop starts on that
+// same moment, so a recording joins without a seam ---
+static const float  JOIN_OUT        = 2.5;   // seconds of the sea rising, at the end of the loop...
+static const float  JOIN_IN         = 2.5;   // ...and of it rising on over the top, at the start
+static const float  JOIN_BLOCK      = 6.0;   // the soft glitch along the water line works in blocks this many cells across
+static const float  JOIN_RATE       = 8.0;   // it changes this many times a second
+static const float  JOIN_GLITCH     = 0.25;  // how strong it is, right on the water line
+static const float  JOIN_BAND       = 14.0;  // and how far either side of the line it reaches, cells
 
 // --- the sunrise keeps glitching, a different way each time ---
 static const float  SUN_FX_SEC      = 0.9;   // each glitch effect lasts this long, swelling and fading into the next
@@ -353,10 +357,21 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     else if (tl < E_THROAT) { id = S_THROAT; t = tl - E_LIPS; }
     else                    { id = S_CITY; t = tl - E_THROAT; }      // runs on past E_CITY into the join
 
-    // the join round the end of the loop: 1 right at the loop's end and start, 0 outside the join
-    float join = 0.0;
-    if (tl > E_CITY)  join = smoothstep(0.0, 1.0, (tl - E_CITY) / JOIN_OUT);
-    if (tl < JOIN_IN) join = 1.0 - smoothstep(0.0, 1.0, tl / JOIN_IN);
+    // the join round the end of the loop: 0 to 1 across both ends, 0.5 right where the loop ends and
+    // starts; -1 outside it. A wavy water line rises from the bottom of the window to the top: above it
+    // the city, below it the fish under the sea
+    float join = -1.0, jt = 0.0, yw = 0.0;
+    if (tl > E_CITY)  join = (tl - E_CITY) / (JOIN_OUT + JOIN_IN);
+    if (tl < JOIN_IN) join = (tl + JOIN_OUT) / (JOIN_OUT + JOIN_IN);
+    if (join >= 0.0)
+    {
+        jt = join * (JOIN_OUT + JOIN_IN);                                   // the join's own clock, the same at both ends
+        yw = lerp(grid.y * 1.12, -grid.y * 0.12, smoothstep(0.0, 1.0, join))
+           + (sin(c.x * 0.031 + jt * 2.0) * 0.035 + sin(c.x * 0.073 - jt * 3.3) * 0.015) * grid.y;
+        bool under = c.y > yw;
+        if (under && id == S_CITY)  { id = S_FISH; t = tl - LOOP_SEC; }
+        if (!under && id == S_FISH) { id = S_CITY; t = tl + LOOP_SEC - E_THROAT; }
+    }
     bool sunrise = id == S_BRIGHT;
 
     // glitch strength now: the random kind outside the planned changes, the planned kind inside them
@@ -370,12 +385,14 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         if (tear >= 0.0) g = 0.4 + 0.5 * tear;
         g *= 0.4 + 0.6 * hash(seed * 0.71);
     }
-    if (join > 0.0)
+    if (join >= 0.0)
     {
-        seed = floor(tl * JOIN_RATE) + 501.0;                       // counted on the loop's own clock, so both ends match
-        g = join * (0.6 + 0.4 * hash(seed * 0.71));
+        seed = floor(jt * JOIN_RATE) + 501.0;                       // counted on the join's own clock, so both ends match
+        g = JOIN_GLITCH * saturate(1.0 - abs(c.y - yw) / (JOIN_BAND * gBase)) * (0.5 + 0.5 * hash(seed * 0.71));
     }
     float2 cc = g > 0.0 ? glitchCoord(c, grid, g, seed) : c;
+    // under the water line the picture wobbles a little, as seen through water
+    if (join >= 0.0 && c.y > yw) cc.x += floor(sin(c.y * 0.12 + jt * 5.0) * 2.0 * gBase * saturate(1.0 - (c.y - yw) / (grid.y * 0.3)));
 
     // glitch blocks: now and then a short run of chunky blocks tears along the block grid, the
     // picture inside them sliding a block or two sideways and turning coarse, so whatever object
@@ -512,11 +529,15 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
     if (gline) col = lerp(col * 1.2, hue(hash2(float2(lrow, lslot + 2.0))), 0.2);
-    [branch] if (join > 0.0)
+    [branch] if (join >= 0.0)
     {
-        // block by block the picture gives way to the colourful glitch; right at the join it is all glitch
+        float dy   = c.y - yw;                                                                   // above 0: under the water
+        float near = saturate(1.0 - abs(dy) / (JOIN_BAND * gBase));
+        if (dy > 0.0) col = lerp(col, float3(0.25, 0.55, 0.60), 0.35 * saturate(1.0 - dy / (grid.y * 0.25)));   // lit from the surface
+        if (abs(dy) < 1.5 * gBase || (abs(dy) < 3.0 * gBase && hash2(floor(c / (2.0 * gBase)) + floor(jt * 10.0)) > 0.5))
+            col = lerp(col, float3(0.75, 0.95, 1.00), 0.7);                                      // the shimmering surface
         float2 jb = floor(c / (JOIN_BLOCK * gBase));
-        if (hash2(jb + 0.25) < smoothstep(0.35, 1.0, join)) col = joinGlitch(c, grid, tl);
+        if (hash2(jb + floor(jt * JOIN_RATE) * 0.37) < 0.25 * near) col = lerp(col, joinGlitch(c, grid, jt), 0.35);   // a few soft blocks of colour along it
     }
     if (bang >= 0.0)
     {

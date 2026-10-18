@@ -69,6 +69,7 @@ static const float  SAND_SPREAD    = 12.0;   // ...and spreads this many cells w
 static const float  SAND_ROUND     = 700.0;  // grains round one turn of the swirl's grain grid...
 static const float  SAND_ALONG     = 120.0;  // ...and per unit of log-distance along it (the grid rides the arms inward)
 static const float  SAND_FLOW      = 0.35;   // how fast the swirl's sand pours inward (log-distance per second)
+static const float  SAND_DISSOLVE  = 0.35;   // share of a puff's life after which it starts dissolving, grain by grain, to nothing
 static const float3 BOTTLE_GLASS   = float3(0.40, 1.00, 0.80);
 static const float3 BOTTLE_DIGITS  = float3(0.30, 1.00, 0.45);
 static const float3 ELEMENTS[6]    = { float3(0.48, 0.47, 0.50), float3(0.45, 0.28, 0.14), float3(0.26, 0.62, 0.20),
@@ -416,10 +417,11 @@ float3 bottleScene(float2 c, float2 grid, float t)
             if (dd > pr) continue;
             if (inSwirl && z < BOTTLE_BEHIND) continue;
             float2 gk = floor((c - pos) / (SAND_GRAIN * s));                 // grains travel with their puff
-            if (hash2(gk + n * 0.37) > 0.95 * (1.0 - 0.7 * (dd / pr) * (dd / pr))) continue;   // thick in the middle, thinning at the edge
+            float  gone = smoothstep(SAND_DISSOLVE, 1.0, age / (BOTTLE_STREAM * BOTTLE_SPOUT));   // late in its life the puff dissolves away
+            if (hash2(gk + n * 0.37) > 0.95 * (1.0 - 0.7 * (dd / pr) * (dd / pr)) * (1.0 - gone)) continue;   // thick in the middle, thinning at the edge
             float3 grain = age < BOTTLE_MATTER ? lerp(BOTTLE_DIGITS, float3(1, 1, 1), hash2(gk + 1.0) * 0.5) : sandColour(hash2(gk + n));
             bestZ = z;
-            best  = lerp(float3(0.01, 0.02, 0.04), grain, lerp(0.45, 1.1, z));
+            best  = lerp(col, lerp(float3(0.01, 0.02, 0.04), grain, lerp(0.45, 1.1, z)), 1.0 - gone * gone);
         }
         col = best;
     }
