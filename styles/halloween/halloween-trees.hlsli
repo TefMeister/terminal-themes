@@ -177,7 +177,7 @@ float3 drawRaven(float3 col, int2 cell, float2 grid, float T, float flash, int i
     int x = faceRight ? (int)l.x : RAVEN_W - 1 - (int)l.x;
     float4 t = texel(sx + x, sy + (int)l.y);
     if (t.w == 0) return col;
-    return SILHOUETTE + t.rgb * (0.35 + flash * 0.8);               // black birds, a sheen in the flashes
+    return RAVEN_GREY + t.rgb * (0.35 + flash * 0.8);               // very dark grey birds, a sheen in the flashes
 }
 
 // little purple flowers in clumps on the field: the first few round the big trees and by the hut,
