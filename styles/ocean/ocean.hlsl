@@ -6,6 +6,9 @@
 // far off), the back row of plants, middle fish (and the whale, when it passes nearer), the crab,
 // rocks and the front row of plants, near fish, then bubbles. A school of small silver fish wanders
 // through at its own depth, turning almost together. So fish swim behind plants too.
+// Day and night take turns: by day the sky is bright and now and then a soft beam of sunlight
+// reaches down through the water; by night the sky is deep blue with a few stars and everything under
+// the water, fish included, is darker. The two fade smoothly into each other.
 // Fish, plants, rocks, the whale and the school fish are pixel sprites from ocean-sheet.png (drawn by
 // ocean-sprites.py and ocean-creatures.py; the sheet layout constants below must match).
 // The colour scheme's background must be pure black: anything not black counts as text.
@@ -116,6 +119,29 @@ static const int    BUBBLES_EACH   = 4;
 static const float  BUBBLE_RISE    = 0.06;   // trips per second from floor to surface
 static const float3 BUBBLE_COLOUR  = float3(0.35, 0.58, 0.65);
 
+// --- day and night (Tefa, 2026-10-24: "3 minutes each") ---
+// One day and one night take DAYNIGHT_SECONDS together, half each. The clock starts at midday, so a
+// recording that starts at 0 begins and ends in the middle of the day; dusk and dawn are the soft
+// TWILIGHT_SECONDS changes centred on the quarter and three-quarter marks.
+static const float  DAYNIGHT_SECONDS = 360.0;
+static const float  TWILIGHT_SECONDS = 36.0;
+static const float3 NIGHT_WATER    = float3(0.20, 0.26, 0.42);   // everything under the water is multiplied by this at night
+static const float3 NIGHT_SKY_TOP  = float3(0.015, 0.025, 0.090);
+static const float3 NIGHT_SKY_LOW  = float3(0.070, 0.090, 0.200);
+static const float3 NIGHT_CLOUD    = float3(0.140, 0.160, 0.250);
+static const float3 NIGHT_SURFACE  = float3(0.220, 0.300, 0.420);
+static const float3 STAR_COLOUR    = float3(0.900, 0.920, 1.000);
+static const float  STAR_SHARE     = 0.004;  // share of sky cells holding a star: a few
+// rare sunbeams by day: soft slanted shafts that fade in, stay a while and fade out again
+static const int    BEAM_SLOTS     = 3;      // at most this many at once
+static const float  BEAM_WINDOW    = 40.0;   // each slot may hold one beam in every window of about this many seconds
+static const float  BEAM_CHANCE    = 0.55;   // share of windows that do
+static const float  BEAM_MIN       = 12.0;   // how long one lasts, seconds...
+static const float  BEAM_MAX       = 26.0;
+static const float  BEAM_FADE      = 4.0;    // ...fading in and out over this long
+static const float3 BEAM_COLOUR    = float3(0.16, 0.20, 0.16);   // added to the water, strongest near the surface
+static const float  BEAM_SLANT     = 0.35;   // cells sideways per cell down
+
 // --- looping, for recording a clip ---
 // 0 = off: the tank runs freely, as it should in the terminal. Set it to a number of seconds and
 // everything that moves repeats exactly that often, so a recording of that length loops without a
@@ -150,6 +176,48 @@ float dither(int2 c) { return (BAYER[(c.y & 3) * 4 + (c.x & 3)] + 0.5) / 16.0; }
 // one that fits the loop exactly; otherwise leave it alone
 float loopRate(float w) { return LOOP_SECONDS > 0.0 ? max(1.0, round(w * LOOP_SECONDS / TAU)) * TAU / max(LOOP_SECONDS, 1.0) : w; }
 float loopFreq(float f) { return LOOP_SECONDS > 0.0 ? max(1.0, round(f * LOOP_SECONDS)) / max(LOOP_SECONDS, 1.0) : f; }
+
+// in loop mode, a frame counter that fits the loop exactly, so an animation of `frames` drawings ends where it
+// began (a plant's 16 drawings do not fit 6 minutes at 5 a second; this drops or repeats one now and then)
+int loopTick(int tick, int frames)
+{
+    if (LOOP_SECONDS <= 0.0) return tick;
+    int L = max(1, (int)round(LOOP_SECONDS * FPS));
+    int n = max(1, (int)round((float)L / frames)) * frames;
+    return pmod(tick, L) * n / L;
+}
+
+// how far into the night it is: 0 by day, 1 by night, smooth in between. Midday at T = 0
+float nightAt(float T)
+{
+    float ph = frac(T / DAYNIGHT_SECONDS);
+    float w  = 0.5 * TWILIGHT_SECONDS / DAYNIGHT_SECONDS;
+    return smoothstep(0.25 - w, 0.25 + w, ph) * (1.0 - smoothstep(0.75 - w, 0.75 + w, ph));
+}
+
+// the sunbeams reaching this cell: 0 none .. 1 full. Counted in windows that fit a loop exactly
+float sunBeams(float2 c, float2 grid, float top, float T)
+{
+    float win = LOOP_SECONDS > 0.0 ? LOOP_SECONDS / max(1.0, round(LOOP_SECONDS / BEAM_WINDOW)) : BEAM_WINDOW;
+    float b = 0.0;
+    [loop] for (int k = 0; k < BEAM_SLOTS; k++)
+    {
+        float tk = T + k * win / BEAM_SLOTS;                       // the slots' windows are staggered
+        float w  = floor(tk / win);
+        if (LOOP_SECONDS > 0.0) w = (float)pmod((int)w, max(1, (int)round(LOOP_SECONDS / win)));
+        float s0 = w * 7.31 + k * 53.7;
+        if (hash(s0 + 0.5) > BEAM_CHANCE) continue;
+        float len = lerp(BEAM_MIN, min(BEAM_MAX, win), hash(s0 + 1.5));
+        float x   = frac(tk / win) * win - hash(s0 + 2.5) * (win - len);
+        if (x < 0.0 || x > len) continue;
+        float life = smoothstep(0.0, BEAM_FADE, x) * smoothstep(0.0, BEAM_FADE, len - x);
+        float bx   = grid.x * (0.10 + 0.80 * hash(s0 + 3.5)) + (c.y - top) * BEAM_SLANT + x * 0.15;   // drifts a little
+        float hw   = lerp(3.0, 9.0, hash(s0 + 4.5)) * (1.0 + 0.6 * saturate((c.y - top) / grid.y));  // widens as it goes down
+        float d    = abs(c.x - bx) / hw;
+        if (d < 1.0) b = max(b, (1.0 - d * d) * life);
+    }
+    return b;
+}
 
 bool isMarker(float3 c) { return all(abs(c - MARKER) < 0.5 / 255.0); }
 float ink(float3 c) { return saturate(max(c.r, max(c.g, c.b))); }
@@ -203,7 +271,7 @@ float3 drawRow(float3 col, int2 cell, float2 grid, float bottom, float horizon, 
         int kind  = first == 0 ? PLANT_PICK[pick] : first + min((int)(hash(fk * 5.7 + 2.0) * kinds), kinds - 1);
         int2 src  = min(int2(float2(loc) / scale), int2(PW - 1, PH - 1));
         if (hash(fk * 1.9) > 0.5) src.x = PW - 1 - src.x;
-        int frame = pmod(tick + k * 5, PLANT_FRAMES);
+        int frame = pmod(loopTick(tick, PLANT_FRAMES) + k * 5, PLANT_FRAMES);
         float4 t  = texel(frame * PW + src.x, kind * PH + src.y);
         if (t.w > 0) col = lerp(t.rgb, water, haze);
     }
@@ -468,6 +536,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float  T     = tick / FPS;
     float  dth   = dither(cell);
     float  cx    = (float)cell.x;
+    float  night = nightAt(T);
 
     // if the sprite sheet is missing or still loading, draw only the water (never black boxes)
     uint iw, ih;
@@ -487,19 +556,23 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     {
         // daylight: a banded blue sky, paler near the sea, with a few soft clouds drifting by
         float v = cell.y / max(top, 1.0);
-        col = lerp(SKY_TOP, SKY_LOW, floor(v * SKY_BANDS + dth) / SKY_BANDS);
+        col = lerp(lerp(SKY_TOP, NIGHT_SKY_TOP, night), lerp(SKY_LOW, NIGHT_SKY_LOW, night), floor(v * SKY_BANDS + dth) / SKY_BANDS);
         float2 cp = float2(cx * 0.012 + (LOOP_SECONDS > 0.0 ? 0.0 : T * CLOUD_DRIFT), cell.y * 0.06);
         float cl = noise2(cp) * 0.7 + noise2(cp * 2.5 + 3.0) * 0.3;
         cl *= saturate(1.0 - abs(v - 0.4) / 0.45);
-        if (cl > 0.55) col = lerp(col, CLOUD_COLOUR, floor(saturate((cl - 0.55) / 0.15) * 3.0 + dth) / 3.0 * 0.8);
+        // a few stars by night, twinkling, never through a cloud
+        float sh = hash2(float2(cell) + 0.37);
+        if (cl <= 0.5 && sh < STAR_SHARE)
+            col = lerp(col, STAR_COLOUR * (0.55 + 0.45 * hash2(float2(cell) + float2(floor(T * 1.5), 3.1))), night);
+        if (cl > 0.55) col = lerp(col, lerp(CLOUD_COLOUR, NIGHT_CLOUD, night), floor(saturate((cl - 0.55) / 0.15) * 3.0 + dth) / 3.0 * 0.8);
     }
     else if (cell.y == top)
     {
         // the surface line, with sunlight glinting on it here and there
-        col = SURFACE_COLOUR;
+        col = lerp(SURFACE_COLOUR, NIGHT_SURFACE, night);
         float glint = floor(T * 0.75);
         if (LOOP_SECONDS > 0.0) glint = (float)pmod((int)glint, max(1, (int)round(LOOP_SECONDS * 0.75)));
-        if (hash2(float2(floor(cx / 2.0), glint)) > 0.93) col = GLINT_COLOUR;
+        if (hash2(float2(floor(cx / 2.0), glint)) > lerp(0.93, 0.985, night)) col = lerp(GLINT_COLOUR, STAR_COLOUR * 0.6, night);   // sun, then moon
     }
     else
     {
@@ -510,6 +583,8 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         float r   = cx + cell.y * 0.45;
         float ray = sin(r * 0.035 + T * loopRate(0.10)) * sin(r * 0.11 - T * loopRate(0.07));
         if (ray + dth * 0.35 > RAY_LEVEL) col += RAY_COLOUR * (1.0 - depth);
+        float beam = night < 0.999 ? sunBeams(float2(cell) + 0.5, grid, top, T) * (1.0 - night) : 0.0;
+        col += BEAM_COLOUR * floor(beam * (1.0 - depth * 0.8) * 4.0 + dth) / 4.0;   // in pixel-art steps
         float3 water = col;
 
         // the far sea floor: hazy at the ridge, turning into sand as it comes closer
@@ -552,6 +627,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
             if (schoolLayer == 3) col = over(col, school);
         }
         col = drawBubbles(col, cell, grid, top, sand, T);
+        col *= lerp(float3(1, 1, 1), NIGHT_WATER, night);           // by night all of it, fish too, is darker
     }
 
     // fade to black at the left and right, in dithered steps so it stays pixel-art
