@@ -20,7 +20,7 @@ static const float3 FISH_SPECK     = float3(0.30, 0.38, 0.32);
 // --- skulls: flying diagonally, smooth at 30 frames a second, with a short smear behind ---
 static const float  SKULL_FPS      = 30.0;
 static const float  SKULL_TURN_SEC = 2.8;    // the skulls glitch and change direction this often
-static const int    SKULL_TURNS_MAX = 8;     // enough turns for the skulls and the crumble after them
+static const int    SKULL_TURNS_MAX = 16;    // enough turns for the skulls and the crumble after them (the long cut needs 15)
 static const int    SKULL_LAYERS   = 3;
 static const float  SKULL_SPEED    = 34.0;   // cells per second at the smallest size
 static const float  SKULL_DENSITY  = 0.5;
@@ -31,7 +31,7 @@ static const float3 SKULL_BG_B     = float3(0.10, 0.03, 0.13);
 // --- the crumble: the skull picture cracks into boxes that fall apart into bits ---
 static const float  CRUMBLE_BIT    = 4.0;    // size of one falling bit, cells (x the sprite size)
 static const float  CRUMBLE_BITS   = 4.0;    // bits along each side of a box
-static const float  CRUMBLE_SPREAD = 3.2;    // seconds from the first box going to the last
+static const float  CRUMBLE_SPREAD = FREQ_LONG ? 6.5 : 3.2;   // seconds from the first box going to the last
 static const float  CRUMBLE_LOOSEN = 0.3;    // bits of one box come loose up to this far apart
 static const float  CRUMBLE_GRAVITY = 140.0; // cells per second per second
 static const float  CRUMBLE_LIFE   = 1.1;    // seconds a falling bit takes to crumble to nothing

@@ -30,32 +30,51 @@ static const float  SCENE_BRIGHT   = 0.50;   // overall picture brightness (text
 static const float  SIDE_FADE      = 0.04;   // share of the width over which each side fades to black
 static const float  BASE_ROWS      = 330.0;  // sprites grow one size step for every this many pixel-art rows of window height
 
+// --- the long cut: frequency-long.hlsl sets FREQ_LONG to 1 and includes this file. Every part then lasts
+// longer, so one loop is exactly 6 minutes (two make a 12-minute video), and the whole-window glitches
+// come less often, leaving more to the glitches in patches. Each pair below is: long cut : as a theme ---
+#ifndef FREQ_LONG
+#define FREQ_LONG 0
+#endif
+
 // --- how long each part lasts, in seconds ---
-static const float  FISH_SEC       = 9.0;
-static const float  RF_SEC         = 3.5;    // each radio-frequency swap
-static const float  SKULL_SEC      = 8.0;
-static const float  CRUMBLE_SEC    = 4.5;
-static const float  BRIGHT_SEC     = 4.0;
-static const float  POLKA_SEC      = 8.0;
-static const float  TV_SEC         = 11.0;
-static const float  TEAR_SEC       = 3.0;
-static const float  ZOOM_SEC       = 3.0;
-static const float  SPACE_SEC      = 10.0;
-static const float  SUBURB_SEC     = 15.0;   // the second station starts here: three towns, 5 s each
-static const float  BOTTLE_SEC     = 7.0;
-static const float  TUNNEL_SEC     = 9.0;   // the tunnel collapsing, slowly...
-static const float  SWIRL_SEC      = 4.0;    // ...and the swirl once it has taken over
-static const float  PC_SEC         = 3.0;
-static const float  EYES_SEC       = 7.0;
-static const float  LIPS_SEC       = 6.0;
-static const float  THROAT_SEC     = 4.0;
-static const float  CITY_SEC       = 13.0;   // the first CITY_STATIC of it is grey static
+static const float  FISH_SEC       = FREQ_LONG ? 30.0 : 9.0;
+static const float  RF_SEC         = FREQ_LONG ? 4.5 : 3.5;     // each radio-frequency swap
+static const float  SKULL_SEC      = FREQ_LONG ? 26.0 : 8.0;
+static const float  CRUMBLE_SEC    = FREQ_LONG ? 9.0 : 4.5;
+static const float  BRIGHT_SEC     = FREQ_LONG ? 18.0 : 4.0;
+static const float  POLKA_SEC      = FREQ_LONG ? 24.0 : 8.0;
+static const float  TV_SEC         = FREQ_LONG ? 30.0 : 11.0;
+static const float  TEAR_SEC       = FREQ_LONG ? 4.0 : 3.0;
+static const float  ZOOM_SEC       = FREQ_LONG ? 5.0 : 3.0;
+static const float  SPACE_SEC      = FREQ_LONG ? 32.0 : 10.0;
+static const float  SUBURB_SEC     = FREQ_LONG ? 37.5 : 15.0;   // the second station starts here: three towns, (SUBURB_SEC + RF_SEC) / 3 each
+static const float  BOTTLE_SEC     = FREQ_LONG ? 18.0 : 7.0;
+static const float  TUNNEL_SEC     = FREQ_LONG ? 18.0 : 9.0;    // the tunnel collapsing, slowly...
+static const float  SWIRL_SEC      = FREQ_LONG ? 10.0 : 4.0;    // ...and the swirl once it has taken over
+static const float  PC_SEC         = FREQ_LONG ? 6.0 : 3.0;
+static const float  EYES_SEC       = FREQ_LONG ? 17.0 : 7.0;
+static const float  LIPS_SEC       = FREQ_LONG ? 13.0 : 6.0;
+static const float  THROAT_SEC     = FREQ_LONG ? 6.0 : 4.0;
+static const float  CITY_SEC       = FREQ_LONG ? 36.0 : 13.0;   // the first CITY_STATIC of it is grey static
 static const float  START_AT       = 0.0;    // for trying things out: start this many seconds into the loop
 
 // --- random glitches between the planned ones ---
 static const float  GLITCH_STRENGTH = 1.0;   // 0 switches the random glitches off; planned ones stay
-static const float  GLITCH_WINDOW  = 7.0;    // each window of this many seconds may hold one glitch
-static const float  GLITCH_CHANCE  = 0.6;    // share of windows that do
+static const float  GLITCH_WINDOW  = FREQ_LONG ? 7.5 : 7.0;    // each window of this many seconds may hold one glitch (7.5 fits 12 minutes exactly)
+static const float  GLITCH_CHANCE  = FREQ_LONG ? 0.3 : 0.6;    // share of windows that do
+
+// --- glitches in patches: several at once, each in its own part of the window and in its own way:
+// turning chunky, rows sliding, mirrored, a piece from somewhere else, magnified, stuck on one moment,
+// tiles shuffled, or another station showing through; most also change the colours inside ---
+static const int    PATCH_SLOTS    = FREQ_LONG ? 8 : 5;         // how many can be going at once
+static const float  PATCH_WINDOW   = 4.0;    // each slot may hold one glitch in every window of about this many seconds
+static const float  PATCH_CHANCE   = 0.7;    // share of windows that do
+static const float  PATCH_MIN      = 0.25;   // shortest, seconds
+static const float  PATCH_MAX      = 2.6;    // longest
+static const float2 PATCH_SIZE_MIN = float2(0.05, 0.04);   // smallest patch, share of the window
+static const float2 PATCH_SIZE_MAX = float2(0.45, 0.35);   // largest
+static const float  PATCH_RATE     = 8.0;    // a patch jumps and stutters this many times a second
 static const float  GLITCH_MIN     = 0.15;   // shortest glitch, seconds
 static const float  GLITCH_MAX     = 2.2;    // longest glitch, seconds
 static const float  GLITCH_RATE_LO = 6.0;    // a glitch changes its look this many times a second...
@@ -83,12 +102,12 @@ static const int    BANG_RINGS      = 12;    // big bangs, one after another
 static const float  BANG_GAP        = 0.08;  // seconds between them
 static const float  BANG_GROW       = 3.4;   // how fast each blast front flies out (it grows e times this often a second)
 static const float  BANG_REVEAL     = 1.1;   // seconds in, the bottle starts to open up in the middle
-static const float  BOTTLE_BLEND    = 4.0;   // seconds the bottle's heap takes to dissolve into the tunnel
+static const float  BOTTLE_BLEND    = FREQ_LONG ? 7.0 : 4.0;   // seconds the bottle's heap takes to dissolve into the tunnel
 static const float  BLEND_BLOCK     = 6.0;   // size of the blocks it dissolves in, cells
 static const float  BLACKOUT_SEC    = 2.0;   // the swirl glitching away to black
-static const float  PC_LINGER       = 2.5;   // the green computer lines linger this long among the first eyes
-static const float  CITY_STATIC     = 4.5;   // long grey static between the throat and the city...
-static const float  CITY_CLEAR      = 1.8;   // ...clearing over its last this-many seconds
+static const float  PC_LINGER       = FREQ_LONG ? 4.0 : 2.5;   // the green computer lines linger this long among the first eyes
+static const float  CITY_STATIC     = FREQ_LONG ? 7.0 : 4.5;   // long grey static between the throat and the city...
+static const float  CITY_CLEAR      = FREQ_LONG ? 2.5 : 1.8;   // ...clearing over its last this-many seconds
 static const float  STATIC_OPACITY  = 0.70;  // how thick the static is: the throat and then the city show faintly through it
 static const float  STATIC_XFADE    = 0.6;   // seconds in, the throat starts crossfading into the city under the static
 static const float  STATIC_SWAY     = 0.06;  // the static sways from side to side this far, share of the width...
@@ -279,6 +298,39 @@ float3 glitchColour(float3 col, float2 c, float g, float seed)
     if (hash2(floor(c / float2(18.0, 6.0)) + seed * 1.7) < 0.06 * g) col = hue(hash2(floor(c / 18.0) + seed));
     if (hash2(float2(c.y, seed * 0.37)) < 0.025 * g) col = tint * 1.3;
     return lerp(orig, col, saturate(g * 1.6));
+}
+
+// scenes another station can show through a patch
+static const int    PATCH_OTHERS[9] = { S_FISH, S_SKULL, S_BRIGHT, S_POLKA, S_TV, S_SPACE, S_SUBURB, S_WARP, S_CITY };
+
+// the topmost patch glitch over this cell, if any. Counted on the loop's own clock, in windows that fit
+// the loop exactly, so every loop has the same ones and a recording still joins without a seam
+bool patchAt(float2 c, float2 grid, float tl, out float4 box, out float seed, out float age, out float tick)
+{
+    bool hit = false;
+    box = 0; seed = 0; age = 0; tick = 0;
+    [loop] for (int k = 0; k < PATCH_SLOTS; k++)
+    {
+        float win = LOOP_SEC / max(1.0, round(LOOP_SEC / (PATCH_WINDOW * (1.0 + 0.23 * k))));
+        float w   = floor(tl / win);
+        float s0  = w * 13.7 + k * 101.3;
+        if (hash(s0 + 0.5) > PATCH_CHANCE) continue;
+        float len   = lerp(PATCH_MIN, PATCH_MAX, pow(hash(s0 + 1.5), 2.0));
+        float start = hash(s0 + 2.5) * (win - len);
+        float x     = tl - w * win - start;
+        if (x < 0.0 || x > len) continue;
+        float tk = floor(x * PATCH_RATE);
+        if (hash(s0 + tk * 0.91) < 0.12) continue;                                          // it stutters off now and then
+        float2 sz  = floor(lerp(PATCH_SIZE_MIN, PATCH_SIZE_MAX, pow(float2(hash(s0 + 3.5), hash(s0 + 4.5)), 1.6)) * grid);
+        float2 mid = floor(float2(hash(s0 + 5.5), hash(s0 + 6.5)) * grid);
+        mid += floor((float2(hash(s0 + tk * 1.3), hash(s0 + tk * 1.7)) - 0.5) * 6.0) * gBase * step(0.7, hash(s0 + tk * 2.1));   // jumps a little now and then
+        // torn edges: the sides jag row by row, the top and bottom column by column
+        float2 jag = floor((float2(hash2(float2(floor(c.y / (3.0 * gBase)), s0 + tk)), hash2(float2(floor(c.x / (5.0 * gBase)), s0 - tk))) - 0.5) * 6.0 * gBase);
+        float2 lo  = mid - sz * 0.5 + jag;
+        if (any(c < lo) || any(c >= lo + sz)) continue;
+        hit = true; box = float4(mid - sz * 0.5, mid + sz * 0.5); seed = s0; age = x; tick = tk;
+    }
+    return hit;
 }
 
 // the colourful glitch the loop ends and begins on: bands of rows sliding sideways, full of blocks of
@@ -518,17 +570,52 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     // the zoom gives way to the cubes cell by cell, in a dither, so only one picture is drawn
     if (zoomMix > 0.65 && hash2(c + floor(T * 20.0)) < smoothstep(0.65, 1.0, zoomMix)) { id = S_SPACE; t = tl - E_ZOOM; cc = c; }
-    float3 col = sceneColour(id, cc, grid, t);
-    [branch] if (sunFx == 5 && id == S_BRIGHT)                                                                           // colours split apart
+
+    // glitches in patches: each picks a way of bending the picture, and most a way of colouring it.
+    // They draw from their own copy of the scene and its clock, so everything else still sees the real ones
+    int    sid = id, pCol = -1;
+    float  st  = t;
+    float4 pBox; float pSeed, pAge, pTick;
+    [branch] if (PATCH_SLOTS > 0 && patchAt(c, grid, tl, pBox, pSeed, pAge, pTick))
+    {
+        float2 pm  = floor((pBox.xy + pBox.zw) * 0.5);
+        int    how = min(7, (int)(hash(pSeed + 7.5) * 8.0));
+        if (how == 0)      { float p = floor(lerp(3.0, 10.0, hash(pSeed + 8.5))) * gBase; cc = floor(cc / p) * p + p * 0.5; }   // turns chunky
+        else if (how == 1) cc.x += floor((hash2(float2(floor(c.y / (2.0 * gBase)), pSeed + pTick)) - 0.5) * (pBox.z - pBox.x) * 0.6);   // rows slide
+        else if (how == 2) cc.x = 2.0 * pm.x - cc.x;                                                                          // mirrored
+        else if (how == 3) cc += floor((float2(hash(pSeed + 9.5), hash(pSeed + 10.5)) - 0.5) * grid * 0.6);                   // a piece from somewhere else
+        else if (how == 4) cc = pm + floor((cc - pm) * 0.5);                                                                  // magnified
+        else if (how == 5) st = t - pAge;                                                                                     // stuck on the moment it began
+        else if (how == 6)                                                                                                    // tiles shuffled
+        {
+            float  B  = 6.0 * gBase;
+            float2 tb = floor((cc - pBox.xy) / B);
+            cc += (floor(float2(hash2(tb + pSeed + pTick), hash2(tb - pSeed - pTick)) * 3.0) - 1.0) * B;
+        }
+        else { sid = PATCH_OTHERS[min(8, (int)(hash(pSeed + 12.5) * 9.0))]; st = 3.0 + hash(pSeed + 13.5) * 10.0 + pAge; }   // another station shows through
+        pCol = min(6, (int)(hash(pSeed + 11.5) * 7.0));                                                                       // 6 leaves the colours alone
+    }
+    float3 col = sceneColour(sid, cc, grid, st);
+    [branch] if (sunFx == 5 && sid == S_BRIGHT)                                                                          // colours split apart
     {
         float2 off = float2(floor(6.0 * sunK) + 1.0, 0.0);
-        col.r = brightWorld(cc + off, grid, t).r;
-        col.b = brightWorld(cc - off, grid, t).b;
+        col.r = brightWorld(cc + off, grid, st).r;
+        col.b = brightWorld(cc - off, grid, st).b;
     }
-    if (sunFx == 6 && id == S_BRIGHT) col = lerp(col, floor(saturate(hueRotate(col, sunK * TAU * frac(T * 0.7)) * 1.3) * 4.0) / 3.0, sunK);   // colour cycling
+    if (sunFx == 6 && sid == S_BRIGHT) col = lerp(col, floor(saturate(hueRotate(col, sunK * TAU * frac(T * 0.7)) * 1.3) * 4.0) / 3.0, sunK);   // colour cycling
 
     if (g > 0.0) col = glitchColour(col, c, g, seed);
     if (gline) col = lerp(col * 1.2, hue(hash2(float2(lrow, lslot + 2.0))), 0.2);
+    if (pCol >= 0 && pCol < 6)
+    {
+        float3 tint = hue(hash(pSeed + 14.5 + pTick * 0.07));
+        if (pCol == 0)      col = 1.0 - saturate(col);                                      // negative
+        else if (pCol == 1) col = col.gbr;                                                  // colours swapped round
+        else if (pCol == 2) col = floor(saturate(col) * 3.0 + dither(c) * 0.5) / 2.0 * tint;   // crushed palette
+        else if (pCol == 3) col = lerp(tint * 0.15, tint * 1.3, luma(col));                 // all one colour
+        else if (pCol == 4) col = frac(col * 3.0 + tint);                                   // rainbow contours
+        else                col = lerp(col, hash2(c + floor(T * 30.0) * 7.31).xxx, 0.5);    // snowy
+    }
     [branch] if (join >= 0.0)
     {
         float dy   = c.y - yw;                                                                   // above 0: under the water

@@ -1,5 +1,6 @@
 // Frequency, part 3: an old wooden TV set on a wallpapered wall, showing a 1930s black-and-white
-// cartoon of a dog in trousers jogging from left to right, the camera following him.
+// cartoon of a dog in trousers jogging from left to right, the camera following him. After he splits in
+// two and the two merge again, the one left is his mirror image, and the film runs the other way, right to left.
 // Included by frequency.hlsl, which holds the shared helpers.
 
 static const float  TV_HEIGHT      = 0.86;   // cabinet height, share of the window
@@ -18,10 +19,10 @@ static const float  TOON_FPS       = 12.0;   // the cartoon runs "on twos", like
 static const float  TOON_RUN       = 42.0;   // how fast the world scrolls past, sprite pixels per second
 static const float  TOON_DOG_SHARE = 0.34;   // dog height as a share of the picture
 static const float  TOON_IRIS_SEC  = 0.9;    // the iris opening at the start
-static const float  TOON_SPLIT_AT  = 3.5;    // seconds in, the dog glitches into himself and a mirror image
+static const float  TOON_SPLIT_AT  = FREQ_LONG ? 7.0 : 3.5;    // seconds in, the dog glitches into himself and a mirror image
 static const float  TOON_SPLIT_SEC = 0.8;    // how long the split glitches
 static const float  TOON_PART_SEC  = 1.4;    // how long the two take to walk apart out of one, and back into one
-static const float  TOON_MERGE_AT  = 7.6;    // seconds in, they start walking back together; the right-hand dog carries on
+static const float  TOON_MERGE_AT  = FREQ_LONG ? 17.0 : 7.6;   // seconds in, they start walking back together; the right-hand dog carries on
 static const float  TOON_SEP_MIN   = 0.04;   // the two dogs' distance from the middle, share of the picture...
 static const float  TOON_SEP_MAX   = 0.22;   // ...swinging between these
 static const float  TOON_SEP_RATE  = 0.9;    // how quickly they drift together and apart
@@ -49,7 +50,11 @@ float3 cartoon(float2 p, float2 size, float t)
     float sc   = max(1.0, round(size.y * TOON_DOG_SHARE / DOG_S));
     float bounce = sin(ts * TAU * 1.5);             // everything bobs to the beat, rubber-hose style
     p.y += round((hash(tick * 1.3) - 0.5) * 2.0);   // gate weave
-    float cam    = ts * TOON_RUN * sc;
+    // how far the world has scrolled: left to right at first; the merge's glitch turns the film round, and
+    // from then on it runs right to left with the mirror-image dog
+    float ta     = TOON_MERGE_AT + TOON_PART_SEC - 0.5, tz = TOON_MERGE_AT + TOON_PART_SEC + 0.3;
+    float run    = ts < ta ? ts : (ts < tz ? ts - (ts - ta) * (ts - ta) / (tz - ta) : ta - (ts - tz));
+    float cam    = run * TOON_RUN * sc;
     float ground = floor(size.y * 0.80);
 
     float3 col = lerp(float3(0.86, 0.86, 0.84), float3(0.74, 0.74, 0.72), floor(p.y / ground * 4.0) / 4.0);
