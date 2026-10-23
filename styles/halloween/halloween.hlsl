@@ -134,6 +134,7 @@ static const float  RAVEN_FLEE     = 4.0;    // seconds to fly out of sight
 static const float  RAVEN_WAIT     = 2.5;    // seconds after the last strike before they come back
 static const float  RAVEN_RETURN   = 6.0;    // seconds to fly back and land
 static const float  RAVEN_FLAP     = 8.0;    // wing beat frames per second
+static const float3 RAVEN_GREY     = float3(0.075, 0.075, 0.080);   // their feathers: a very dark grey, so they just stand out from the night
 
 // --- purple flowers in the grass ---
 static const int    FLOWER_PATCHES = 18;     // the first ones grow round the big trees and the hut
