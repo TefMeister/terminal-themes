@@ -24,7 +24,7 @@ static const float  VANISH_FROM    = 0.6;    // seconds after the middle mouth a
 static const float  VANISH_BY      = 0.55;   // ...the last one gone by this share of THROAT_SEC
 static const float  VANISH_SEC     = 0.6;    // how long each one takes to glitch away
 static const float  MOUTH_START    = 0.05;   // its first size, share of the window height
-static const float  MOUTH_GROW     = 0.8;    // how fast it grows (it doubles about every 0.9 s)
+static const float  MOUTH_GROW     = FREQ_LONG ? 0.5 : 0.8;    // how fast it grows (at 0.8 it doubles about every 0.9 s)
 static const float  MOUTH_PIXELS   = 18.0;   // a mouth is this many big pixels across, whatever its size
 static const float  MIDDLE_PIXELS  = 26.0;   // the middle mouth, a little finer
 static const float3 IRISES[6]      = { float3(0.25, 0.55, 0.95), float3(0.30, 0.70, 0.30), float3(0.45, 0.28, 0.12),
@@ -46,7 +46,7 @@ static const float3 DAWN_SKY_TOP   = float3(0.22, 0.16, 0.42);
 static const float3 DAWN_SKY_LOW   = float3(1.00, 0.52, 0.32);
 static const float3 DAY_SKY_TOP    = float3(0.22, 0.50, 0.92);
 static const float3 DAY_SKY_LOW    = float3(0.72, 0.86, 1.00);
-static const float  SKY_TURN_FROM  = 3.0;    // seconds in, the sky starts turning from night to day...
+static const float  SKY_TURN_FROM  = FREQ_LONG ? 5.0 : 3.0;    // seconds in, the sky starts turning from night to day...
 static const float  SKY_TURN_TO    = CITY_SEC + 1.5;   // ...and has turned this far by here (into the join)
 static const float  SKY_TURN       = 1.75;   // radians the whole sky turns round a point below the horizon
 static const float  SKY_PIVOT      = 0.15;   // that point, share of the height below the horizon
@@ -61,7 +61,7 @@ static const float  STAR_SHARE     = 0.05;   // ...this share of whose squares h
 static float gDay;                           // how far into the day the city is, 0..1, set by cityScene
 static const float  WAVE_CALM      = 0.08;   // how high the ocean's waves are at first, against the eye height...
 static const float  WAVE_SWELL     = 0.32;   // ...and how much higher they have grown by the time the glitch takes over
-static const float  WAVE_GROW_SEC  = 8.0;    // the waves grow over this many seconds, up to the middle of the join
+static const float  WAVE_GROW_SEC  = FREQ_LONG ? 14.0 : 8.0;   // the waves grow over this many seconds, up to the middle of the join
 static const float  WAVE_LIGHT     = 3.0;    // how strongly a wave's near slope is lit and its far slope shaded
 
 float3 pcScene(float2 c, float2 grid, float t)

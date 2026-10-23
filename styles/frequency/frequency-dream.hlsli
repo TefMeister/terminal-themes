@@ -81,7 +81,7 @@ static const float  WARP_DEPTH     = 3.0;    // tiles per unit of depth
 static const float  WARP_SPEED     = 0.2;    // flying in, slowly
 static const float  WARP_DRIFT     = 0.3;    // how quickly everything else in the tunnel moves (1 = the old pace)
 static const float  WARP_TWIST     = 2.2;    // how hard the tunnel twists once time is fully warped
-static const float  WARP_SWIRL_AT  = 3.0;    // seconds in, the swirl starts spreading from the middle
+static const float  WARP_SWIRL_AT  = FREQ_LONG ? 6.0 : 3.0;    // seconds in, the swirl starts spreading from the middle
 static const float  SWIRL_ARMS     = 5.0;
 static const float  SWIRL_TIGHT    = 2.6;
 static const float  SWIRL_SPIN     = 0.45;   // slow: a long, hypnotic descent
