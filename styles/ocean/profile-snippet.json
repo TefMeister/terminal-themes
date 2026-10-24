@@ -3,6 +3,7 @@
     "profile": {
         "name": "Ocean Claude",
         "commandline": "claude.exe",
+        "startingDirectory": "%USERPROFILE%/Desktop",
         "colorScheme": "Ocean",
         "cursorShape": "bar",
         "padding": "16",

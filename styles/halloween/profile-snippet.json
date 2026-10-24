@@ -3,6 +3,7 @@
     "profile": {
         "name": "Halloween Claude",
         "commandline": "claude.exe",
+        "startingDirectory": "%USERPROFILE%/Desktop",
         "colorScheme": "Halloween",
         "cursorShape": "bar",
         "padding": "16",
