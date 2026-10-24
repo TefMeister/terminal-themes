@@ -3,6 +3,7 @@
     "profile": {
         "name": "Green Monitor Claude",
         "commandline": "claude.exe",
+        "startingDirectory": "%USERPROFILE%/Desktop",
         "colorScheme": "RobCo",
         "cursorShape": "filledBox",
         "padding": "16",

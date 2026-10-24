@@ -3,6 +3,7 @@
     "profile": {
         "name": "Frequency Claude",
         "commandline": "claude.exe",
+        "startingDirectory": "%USERPROFILE%/Desktop",
         "colorScheme": "Frequency",
         "cursorShape": "bar",
         "padding": "16",

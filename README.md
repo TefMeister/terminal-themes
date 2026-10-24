@@ -196,6 +196,12 @@ out on one picture and the shader flips through them.
 To go back to a still picture, set the first three numbers back to `1`. The flower that comes with
 the theme is a still picture.
 
+## Every Claude theme opens on the Desktop
+
+Each style's profile has `"startingDirectory": "%USERPROFILE%/Desktop"`, so a new tab starts Claude on
+your Desktop instead of in a system folder. Keep that line when you paste the profile in, and give
+every new style the same line.
+
 ## Install (green-monitor-lanes or green-monitor-starburst)
 
 1. Download or clone this repo somewhere that will stay put.
