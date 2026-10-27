@@ -5,6 +5,10 @@ small shader (a file that repaints the terminal window) plus a colour scheme.
 
 ![The green monitor Lanes style](preview/green-monitor-lanes.png)
 
+## Download
+
+**[Download every theme as one zip](https://github.com/TefMeister/terminal-themes/archive/refs/heads/main.zip)** (always the newest copy; no account or Lanes needed). Unzip it anywhere. With the [Lanes](https://github.com/TefMeister/lanes-plugin) plugin for Claude Code you can get it from `/lanes:setup` instead, and it stays up to date by itself.
+
 ## The styles
 
 Each style below has a short recording of it running, with a few lines of sample text. Every clip is
@@ -204,7 +208,7 @@ every new style the same line.
 
 ## Install (green-monitor-lanes or green-monitor-starburst)
 
-1. Download or clone this repo somewhere that will stay put.
+1. [Download this repo](#download) or clone it somewhere that will stay put.
 2. Install the font: open [`fonts/ShareTechMono-Regular.ttf`](fonts/ShareTechMono-Regular.ttf) and
    click **Install**. It is free and included here under its open licence (see below). You can also get
    it from [Google Fonts](https://fonts.google.com/specimen/Share+Tech+Mono).
@@ -221,7 +225,7 @@ shader finds and turns a yellow-green, so you can tell your lines from Claude's 
 
 ## Install (ocean)
 
-1. Download or clone this repo somewhere that will stay put.
+1. [Download this repo](#download) or clone it somewhere that will stay put.
 2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
 3. From [`profile-snippet.json`](styles/ocean/profile-snippet.json), paste the `profile` into
    `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
@@ -234,7 +238,7 @@ If you change the sheet's layout, change the matching numbers at the top of `oce
 
 ## Install (halloween)
 
-1. Download or clone this repo somewhere that will stay put.
+1. [Download this repo](#download) or clone it somewhere that will stay put.
 2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
 3. From [`profile-snippet.json`](styles/halloween/profile-snippet.json), paste the `profile` into
    `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
@@ -251,7 +255,7 @@ must stay next to `halloween.hlsl` if you copy them somewhere else.
 
 ## Install (frequency)
 
-1. Download or clone this repo somewhere that will stay put.
+1. [Download this repo](#download) or clone it somewhere that will stay put.
 2. Open Windows Terminal → Settings → **Open JSON file**. Make a backup copy of it first.
 3. From [`profile-snippet.json`](styles/frequency/profile-snippet.json), paste the `profile` into
    `profiles` → `list` and the `scheme` into `schemes`. Replace `<FOLDER>` with where you put this
