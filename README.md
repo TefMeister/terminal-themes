@@ -21,6 +21,11 @@ monitor as the starburst below, but behind the text sits the Lanes Plugin banner
 striped green (no white, so the letters stay easy to read), with the light slowly running down the screen over it. The whole banner
 fits across the window and stays centred as the window changes size.
 
+**A still version, lighter on the PC (2026-11-01):** `lanes-still.hlsl` is the same look with the
+moving light taken out. Windows Terminal redraws a window over and over only while its shader uses
+time; the still copy never does, so the window is drawn again only when the text changes. Point the
+profile's `experimental.pixelShaderPath` at it instead of `lanes.hlsl`; the picture stays the same.
+
 ![The green monitor Lanes style](preview/green-monitor-lanes.png)
 
 ### [`green-monitor-starburst`](styles/green-monitor-starburst/)
